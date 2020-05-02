@@ -7,10 +7,8 @@ keywords = ["continualdeployment"]
 license = "Apache-2.0"
 name = "unleash-api-client"
 publish = false
-version = "0.1.0"
 readme = "README.md"
-
-
+version = "0.1.0"
 [badges]
 [badges.maintenance]
 status = "experimental"
@@ -18,9 +16,13 @@ status = "experimental"
 [dependencies]
 anyhow = "*"
 async-std = "1.5.0"
+hostname = "0.3.1"
 http-client = "2.0.0"
 http-types = "1.2.0"
 ipaddress = "0.1.2"
+maplit = "1.0.2"
+murmur3 = "*"
+rand = "0.7.3"
 serde_json = "1.0.52"
 surf = "2.0.0-alpha.2"
 

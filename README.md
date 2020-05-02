@@ -10,6 +10,9 @@ executor and `block_on()` the relevant calls. As the client specification
 requires sending background metrics to the API, you will need to arrange to
 call the `submit_metrics` method periodically.
 
+The unleash defined strategies are included, to support custom strategies implement
+the Strategy trait and insert the strategy into the Unleash.strategies collection.
+
 ## status
 
 Current status - in development. 
