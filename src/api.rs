@@ -1,6 +1,8 @@
 /// https://unleash.github.io/docs/api/client/features
 use std::collections::HashMap;
+use std::default::Default;
 
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -46,8 +48,36 @@ pub struct VariantOverride {
     pub values: Vec<String>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Registration {
+    #[serde(rename = "appName")]
+    pub app_name: String,
+    #[serde(rename = "instanceId")]
+    pub instance_id: String,
+    #[serde(rename = "sdkVersion")]
+    sdk_version: String,
+    pub strategies: Vec<String>,
+    started: chrono::DateTime<chrono::Utc>,
+    interval: u64,
+}
+
+impl Default for Registration {
+    fn default() -> Self {
+        Self {
+            app_name: "".into(),
+            instance_id: "".into(),
+            sdk_version: "unleash-client-rust-0.1.0".into(),
+            strategies: vec![],
+            started: Utc::now(),
+            interval: 15 * 1000,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::Registration;
+
     #[test]
     fn parse_reference_doc() -> Result<(), serde_json::Error> {
         let data = r#"
@@ -125,5 +155,16 @@ mod tests {
         let parsed: super::Features = serde_json::from_str(data)?;
         assert_eq!(1, parsed.version);
         Ok(())
+    }
+
+    #[test]
+    fn test_registration_customisation() {
+        Registration {
+            app_name: "test-suite".into(),
+            instance_id: "test".into(),
+            strategies: vec!["default".into()],
+            interval: 5000,
+            ..Default::default()
+        };
     }
 }
