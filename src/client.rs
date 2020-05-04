@@ -12,34 +12,76 @@ use crate::context::Context;
 use crate::http::HTTP;
 use crate::strategy;
 
+pub struct ClientBuilder<'a> {
+    strategies: HashMap<String, &'a strategy::Strategy>,
+}
+
+impl<'a> ClientBuilder<'a> {
+    pub fn into_client<C: http_client::HttpClient + Default>(
+        self,
+        app_name: &str,
+        instance_id: &str,
+        authorization: Option<&str>,
+    ) -> Result<Client<'a, C>, http_client::Error> {
+        Ok(Client {
+            http: HTTP::new(
+                app_name.into(),
+                instance_id.into(),
+                authorization.map(|s| s.to_owned()),
+            )?,
+            cached_state: ArcSwapOption::from(None),
+            strategies: self.strategies,
+        })
+    }
+
+    pub fn strategy(&mut self, name: &str, strategy: &'a strategy::Strategy) -> &mut Self {
+        self.strategies.insert(name.into(), strategy);
+        self
+    }
+}
+
+impl<'a> Default for ClientBuilder<'a> {
+    fn default() -> ClientBuilder<'a> {
+        let mut result = ClientBuilder {
+            strategies: Default::default(),
+        };
+        result
+            .strategy("default", &strategy::default)
+            .strategy("applicationHostname", &strategy::hostname)
+            .strategy("default", &strategy::default)
+            .strategy("gradualRolloutRandom", &strategy::random)
+            .strategy("gradualRolloutSessionId", &strategy::session_id)
+            .strategy("gradualRolloutUserId", &strategy::user_id)
+            .strategy("remoteAddress", &strategy::remote_address)
+            .strategy("userWithId", &strategy::user_with_id)
+            .strategy("flexibleRollout", &strategy::flexible_rollout);
+        result
+    }
+}
+
 pub struct Client<'a, C: http_client::HttpClient> {
     http: HTTP<C>,
     // known strategies: strategy_name : memoiser
-    strategies: HashMap<String, &'a strategy::Strategy<'a>>,
+    strategies: HashMap<String, &'a strategy::Strategy>,
     // memoised state: feature_name: [callback, callback, ...]
     cached_state: ArcSwapOption<HashMap<String, Vec<Box<strategy::Evaluate>>>>,
 }
 
 impl<'a, C: http_client::HttpClient + std::default::Default> Client<'a, C> {
     pub fn new(
-        app_name: String,
-        instance_id: String,
-        authorization: Option<String>,
+        app_name: &str,
+        instance_id: &str,
+        authorization: Option<&str>,
     ) -> Result<Self, http_client::Error> {
-        let mut strategies: HashMap<String, &'a strategy::Strategy<'a>> = HashMap::new();
-        strategies.insert("default".into(), &strategy::default);
-        strategies.insert("applicationHostname".into(), &strategy::hostname);
-        strategies.insert("default".into(), &strategy::default);
-        strategies.insert("gradualRolloutRandom".into(), &strategy::random);
-        strategies.insert("gradualRolloutSessionId".into(), &strategy::session_id);
-        strategies.insert("gradualRolloutUserId".into(), &strategy::user_id);
-        strategies.insert("remoteAddress".into(), &strategy::remote_address);
-        strategies.insert("userWithId".into(), &strategy::user_with_id);
-        strategies.insert("flexibleRollout".into(), &strategy::flexible_rollout);
+        let builder = ClientBuilder::default();
         Ok(Self {
-            http: HTTP::new(app_name, instance_id, authorization)?,
+            http: HTTP::new(
+                app_name.into(),
+                instance_id.into(),
+                authorization.map(|s| s.to_owned()),
+            )?,
             cached_state: ArcSwapOption::from(None),
-            strategies,
+            strategies: builder.strategies,
         })
     }
 
@@ -119,11 +161,17 @@ fn _disabled(_: &Context) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::hash_map::HashMap;
+    use std::collections::hash_set::HashSet;
+    use std::hash::BuildHasher;
+
     use maplit::hashmap;
 
-    use super::Client;
+    use super::{Client, ClientBuilder};
     use crate::api::{Feature, Features, Strategy};
     use crate::context::Context;
+    use crate::strategy;
+
     #[test]
     fn test_memoization() {
         let _ = simple_logger::init();
@@ -182,9 +230,7 @@ mod tests {
                 },
             ],
         };
-        let mut c =
-            Client::<http_client::native::NativeClient>::new("foo".into(), "test".into(), None)
-                .unwrap();
+        let mut c = Client::<http_client::native::NativeClient>::new("foo", "test", None).unwrap();
         c.memoize(f.features).unwrap();
         let present: Context = Context {
             user_id: Some("present".into()),
@@ -210,5 +256,78 @@ mod tests {
         );
         // disabled should be disabled
         assert_eq!(false, c.is_enabled("disabled", None, true));
+    }
+
+    fn _reversed_uids<S: BuildHasher>(
+        parameters: Option<HashMap<String, String, S>>,
+    ) -> Box<strategy::Evaluate> {
+        let mut uids: HashSet<String> = HashSet::new();
+        if let Some(parameters) = parameters {
+            if let Some(uids_list) = parameters.get("userIds") {
+                for uid in uids_list.split(',') {
+                    uids.insert(uid.chars().rev().collect());
+                }
+            }
+        }
+        Box::new(move |context: &Context| -> bool {
+            context
+                .user_id
+                .as_ref()
+                .map(|uid| uids.contains(uid))
+                .unwrap_or(false)
+        })
+    }
+    #[test]
+    fn test_custom_strategy() {
+        let _ = simple_logger::init();
+        let mut builder = ClientBuilder::default();
+        builder.strategy("reversed", &_reversed_uids);
+        let mut client = builder
+            .into_client::<http_client::native::NativeClient>("foo", "test", None)
+            .unwrap();
+
+        let f = Features {
+            version: 1,
+            features: vec![
+                Feature {
+                    description: "default".into(),
+                    enabled: true,
+                    created_at: None,
+                    variants: None,
+                    name: "default".into(),
+                    strategies: vec![Strategy {
+                        name: "default".into(),
+                        parameters: None,
+                    }],
+                },
+                Feature {
+                    description: "reversed".into(),
+                    enabled: true,
+                    created_at: None,
+                    variants: None,
+                    name: "reversed".into(),
+                    strategies: vec![Strategy {
+                        name: "reversed".into(),
+                        parameters: Some(hashmap!["userIds".into()=>"abc".into()]),
+                    }],
+                },
+            ],
+        };
+        client.memoize(f.features).unwrap();
+        let present: Context = Context {
+            user_id: Some("cba".into()),
+            ..Default::default()
+        };
+        let missing: Context = Context {
+            user_id: Some("abc".into()),
+            ..Default::default()
+        };
+        // user cba should be present on reversed
+        assert_eq!(true, client.is_enabled("reversed", Some(&present), false));
+        // user abc should not
+        assert_eq!(false, client.is_enabled("reversed", Some(&missing), false));
+        // adding custom strategies shouldn't disable built-in ones
+        // default should be enabled, no context needed
+        assert_eq!(true, client.is_enabled("default", None, false));
     }
 }

@@ -11,7 +11,7 @@ use rand::Rng;
 use crate::context::Context;
 
 /// Memoise feature state for a strategy.
-pub type Strategy<'a> = dyn Fn(Option<HashMap<String, String>>) -> Box<Evaluate>;
+pub type Strategy = dyn Fn(Option<HashMap<String, String>>) -> Box<Evaluate>;
 /// Apply memoised state to a context.
 pub type Evaluate = dyn Fn(&Context) -> bool;
 
