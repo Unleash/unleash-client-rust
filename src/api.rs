@@ -7,7 +7,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
+// #[serde(deny_unknown_fields)]
 pub struct Features {
     pub version: u8,
     pub features: Vec<Feature>,
@@ -20,7 +20,7 @@ impl Features {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
+// #[serde(deny_unknown_fields)]
 pub struct Feature {
     pub name: String,
     pub description: String,
@@ -32,14 +32,14 @@ pub struct Feature {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
+// #[serde(deny_unknown_fields)]
 pub struct Strategy {
     pub name: String,
     pub parameters: Option<HashMap<String, String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
+// #[serde(deny_unknown_fields)]
 pub struct Variant {
     pub name: String,
     pub weight: u8,
@@ -48,7 +48,7 @@ pub struct Variant {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
+// #[serde(deny_unknown_fields)]
 pub struct VariantOverride {
     #[serde(rename = "contextName")]
     pub context_name: String,
