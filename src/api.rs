@@ -13,6 +13,12 @@ pub struct Features {
     pub features: Vec<Feature>,
 }
 
+impl Features {
+    pub fn endpoint(api_url: &str) -> String {
+        format!("{}/client/features", api_url)
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct Feature {
@@ -60,6 +66,12 @@ pub struct Registration {
     pub strategies: Vec<String>,
     started: chrono::DateTime<chrono::Utc>,
     interval: u64,
+}
+
+impl Registration {
+    pub fn endpoint(api_url: &str) -> String {
+        format!("{}/client/register", api_url)
+    }
 }
 
 impl Default for Registration {
