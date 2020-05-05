@@ -1,4 +1,5 @@
-/// The primary interface for users of the library.
+// Copyright 2020 Cognite AS
+//! The primary interface for users of the library.
 use std::collections::hash_map::HashMap;
 use std::default::Default;
 use std::sync::Arc;

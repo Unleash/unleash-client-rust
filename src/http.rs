@@ -1,4 +1,5 @@
-/// The HTTP Layer
+// Copyright 2020 Cognite AS
+//! The HTTP Layer
 use std::default::Default;
 
 use http_types::headers;

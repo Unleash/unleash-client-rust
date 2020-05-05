@@ -1,4 +1,5 @@
-/// https://unleash.github.io/docs/activation_strategy
+// Copyright 2020 Cognite AS
+//! https://unleash.github.io/docs/activation_strategy
 use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
 use std::hash::BuildHasher;

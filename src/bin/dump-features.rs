@@ -1,3 +1,4 @@
+// Copyright 2020 Cognite AS
 use std::env;
 
 use async_std::task;

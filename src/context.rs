@@ -1,4 +1,5 @@
-/// https://unleash.github.io/docs/unleash_context
+// Copyright 2020 Cognite AS
+//! https://unleash.github.io/docs/unleash_context
 use std::collections::HashMap;
 
 #[derive(Debug, Default)]
