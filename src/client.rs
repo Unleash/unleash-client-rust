@@ -2,18 +2,21 @@
 //! The primary interface for users of the library.
 use std::collections::hash_map::HashMap;
 use std::default::Default;
-use std::sync::Arc;
-
-use log::{debug, trace};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use arc_swap::ArcSwapOption;
+use futures_timer::Delay;
+use log::{debug, trace, warn};
 
-use crate::api::{Feature, Registration};
+use crate::api::{Feature, Features, Registration};
 use crate::context::Context;
 use crate::http::HTTP;
 use crate::strategy;
 
 pub struct ClientBuilder<'a> {
+    interval: u64,
     strategies: HashMap<String, &'a strategy::Strategy>,
 }
 
@@ -29,10 +32,17 @@ impl<'a> ClientBuilder<'a> {
             api_url: api_url.into(),
             app_name: app_name.into(),
             instance_id: instance_id.into(),
+            interval: self.interval,
+            polling: AtomicBool::new(false),
             http: HTTP::new(app_name.into(), instance_id.into(), authorization)?,
             cached_state: ArcSwapOption::from(None),
-            strategies: self.strategies,
+            strategies: Mutex::new(self.strategies),
         })
+    }
+
+    pub fn interval(&mut self, interval: u64) -> &mut Self {
+        self.interval = interval;
+        self
     }
 
     pub fn strategy(&mut self, name: &str, strategy: &'a strategy::Strategy) -> &mut Self {
@@ -44,6 +54,7 @@ impl<'a> ClientBuilder<'a> {
 impl<'a> Default for ClientBuilder<'a> {
     fn default() -> ClientBuilder<'a> {
         let mut result = ClientBuilder {
+            interval: 15000,
             strategies: Default::default(),
         };
         result
@@ -64,9 +75,11 @@ pub struct Client<'a, C: http_client::HttpClient> {
     api_url: String,
     app_name: String,
     instance_id: String,
+    interval: u64,
+    polling: AtomicBool,
     http: HTTP<C>,
     // known strategies: strategy_name : memoiser
-    strategies: HashMap<String, &'a strategy::Strategy>,
+    strategies: Mutex<HashMap<String, &'a strategy::Strategy>>,
     // memoised state: feature_name: [callback, callback, ...]
     cached_state: ArcSwapOption<HashMap<String, Vec<Box<strategy::Evaluate>>>>,
 }
@@ -83,9 +96,11 @@ impl<'a, C: http_client::HttpClient + std::default::Default> Client<'a, C> {
             api_url: api_url.into(),
             app_name: app_name.into(),
             instance_id: instance_id.into(),
+            interval: 15000,
+            polling: AtomicBool::new(false),
             http: HTTP::new(app_name.into(), instance_id.into(), authorization)?,
             cached_state: ArcSwapOption::from(None),
-            strategies: builder.strategies,
+            strategies: Mutex::new(builder.strategies),
         })
     }
 
@@ -134,7 +149,12 @@ impl<'a, C: http_client::HttpClient + std::default::Default> Client<'a, C> {
         }
     }
 
-    pub fn memoize(&mut self, features: Vec<Feature>) -> Result<(), Box<dyn std::error::Error>> {
+    /// Memoize new features into the cached state
+    ///
+    /// Interior mutability is used, via the arc-swap crate.
+    fn memoize(&self, features: Vec<Feature>) -> Result<(), Box<dyn std::error::Error>> {
+        trace!("memoize: start with {} features", features.len());
+        let strategies = self.strategies.lock().unwrap();
         let mut new_cache: HashMap<String, Vec<Box<strategy::Evaluate>>> = HashMap::new();
         for feature in features {
             if !feature.enabled {
@@ -145,7 +165,7 @@ impl<'a, C: http_client::HttpClient + std::default::Default> Client<'a, C> {
             // TODO add variant support
             let mut memos = vec![];
             for api_strategy in feature.strategies {
-                if let Some(code_strategy) = self.strategies.get(&api_strategy.name) {
+                if let Some(code_strategy) = strategies.get(&api_strategy.name) {
                     memos.push(code_strategy(api_strategy.parameters));
                 }
                 // Graceful degradation: ignore this unknown strategy.
@@ -155,7 +175,33 @@ impl<'a, C: http_client::HttpClient + std::default::Default> Client<'a, C> {
             new_cache.insert(feature.name.clone(), memos);
         }
         self.cached_state.store(Some(Arc::new(new_cache)));
+        trace!("memoize: finished");
         Ok(())
+    }
+
+    /// poll the API endpoint for features.
+    ///
+    /// exits at the next polling cycle after stop_poll is called().
+    pub async fn poll(&self) {
+        // TODO: add an event / pipe to permit immediate exit.
+        let endpoint = Features::endpoint(&self.api_url);
+        self.polling.store(true, Ordering::Relaxed);
+        loop {
+            trace!("poll: retrieving features");
+            let res = self.http.get(&endpoint).recv_json().await;
+            if let Ok(res) = res {
+                let features: Features = res;
+                if self.memoize(features.features).is_err() {
+                    warn!("poll: failed to memoize features");
+                }
+            } else {
+                warn!("poll: failed to retrieve features");
+            }
+            Delay::new(Duration::from_millis(self.interval)).await;
+            if !self.polling.load(Ordering::Relaxed) {
+                return;
+            }
+        }
     }
 
     /// Register this client with the API endpoint.
@@ -164,7 +210,14 @@ impl<'a, C: http_client::HttpClient + std::default::Default> Client<'a, C> {
         let registration = Registration {
             app_name: self.app_name.clone(),
             instance_id: self.instance_id.clone(),
-            strategies: self.strategies.keys().map(|s| s.to_owned()).collect(),
+            interval: self.interval,
+            strategies: self
+                .strategies
+                .lock()
+                .unwrap()
+                .keys()
+                .map(|s| s.to_owned())
+                .collect(),
             ..Default::default()
         };
         let res = self
@@ -176,6 +229,26 @@ impl<'a, C: http_client::HttpClient + std::default::Default> Client<'a, C> {
             return Err(anyhow::anyhow!("Failed to register with unleash API server").into());
         }
         Ok(())
+    }
+
+    /// stop the poll() function.
+    ///
+    /// If poll is not running, will spin-loop until poll is running, then signal it
+    /// to stop, then return.
+    pub async fn stop_poll(&self) {
+        loop {
+            match self
+                .polling
+                .compare_exchange(true, false, Ordering::Relaxed, Ordering::Relaxed)
+            {
+                Ok(_) => {
+                    return;
+                }
+                Err(_) => {
+                    Delay::new(Duration::from_millis(50)).await;
+                }
+            }
+        }
     }
 }
 
@@ -254,7 +327,7 @@ mod tests {
                 },
             ],
         };
-        let mut c = Client::<http_client::native::NativeClient>::new(
+        let c = Client::<http_client::native::NativeClient>::new(
             "http://127.0.0.1:1234/",
             "foo",
             "test",
@@ -312,7 +385,7 @@ mod tests {
         let _ = simple_logger::init();
         let mut builder = ClientBuilder::default();
         builder.strategy("reversed", &_reversed_uids);
-        let mut client = builder
+        let client = builder
             .into_client::<http_client::native::NativeClient>(
                 "http://127.0.0.1:1234/",
                 "foo",

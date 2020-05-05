@@ -4,13 +4,13 @@ categories = ["api-bindings", "web-programming"]
 default-run = "dump-features"
 description = "An https://unleash.github.io/ API client"
 edition = "2018"
-keywords = ["continualdeployment"]
 homepage = "https://github.com/cognitedata/unleash-client-rust/"
-repository = "https://github.com/cognitedata/unleash-client-rust/"
+keywords = ["continualdeployment"]
 license = "Apache-2.0"
 name = "unleash-api-client"
 publish = false
 readme = "README.md"
+repository = "https://github.com/cognitedata/unleash-client-rust/"
 version = "0.1.0"
 [badges]
 [badges.maintenance]
@@ -20,6 +20,8 @@ status = "experimental"
 anyhow = "*"
 arc-swap = "0.4.6"
 async-std = "1.5.0"
+futures = "0.3.4"
+futures-timer = "3.0.2"
 hostname = "0.3.1"
 http-client = "2.0.0"
 http-types = "1.2.0"
@@ -41,3 +43,7 @@ version = "1.0"
 
 [dev-dependencies]
 simple_logger = "1.6.0"
+
+[features]
+functional = []
+
