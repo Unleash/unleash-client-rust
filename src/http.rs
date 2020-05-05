@@ -45,4 +45,18 @@ impl<C: http_client::HttpClient + std::default::Default> HTTP<C> {
             request
         }
     }
+
+    /// Perform a GET. Returns errors per surf::Client::get.
+    pub fn post(&self, uri: impl AsRef<str>) -> surf::Request<C> {
+        let request = self
+            .client
+            .post(uri)
+            .set_header(self.app_name_header.clone(), &self.app_name)
+            .set_header(self.instance_id_header.clone(), &self.instance_id);
+        if let Some(auth) = &self.authorization {
+            request.set_header(self.authorization_header.clone(), auth)
+        } else {
+            request
+        }
+    }
 }

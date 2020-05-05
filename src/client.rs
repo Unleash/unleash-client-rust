@@ -4,11 +4,11 @@ use std::collections::hash_map::HashMap;
 use std::default::Default;
 use std::sync::Arc;
 
-use log::{debug, info, trace, warn};
+use log::{debug, trace};
 
 use arc_swap::ArcSwapOption;
 
-use crate::api::Feature;
+use crate::api::{Feature, Registration};
 use crate::context::Context;
 use crate::http::HTTP;
 use crate::strategy;
@@ -20,16 +20,16 @@ pub struct ClientBuilder<'a> {
 impl<'a> ClientBuilder<'a> {
     pub fn into_client<C: http_client::HttpClient + Default>(
         self,
+        api_url: &str,
         app_name: &str,
         instance_id: &str,
-        authorization: Option<&str>,
+        authorization: Option<String>,
     ) -> Result<Client<'a, C>, http_client::Error> {
         Ok(Client {
-            http: HTTP::new(
-                app_name.into(),
-                instance_id.into(),
-                authorization.map(|s| s.to_owned()),
-            )?,
+            api_url: api_url.into(),
+            app_name: app_name.into(),
+            instance_id: instance_id.into(),
+            http: HTTP::new(app_name.into(), instance_id.into(), authorization)?,
             cached_state: ArcSwapOption::from(None),
             strategies: self.strategies,
         })
@@ -61,6 +61,9 @@ impl<'a> Default for ClientBuilder<'a> {
 }
 
 pub struct Client<'a, C: http_client::HttpClient> {
+    api_url: String,
+    app_name: String,
+    instance_id: String,
     http: HTTP<C>,
     // known strategies: strategy_name : memoiser
     strategies: HashMap<String, &'a strategy::Strategy>,
@@ -70,17 +73,17 @@ pub struct Client<'a, C: http_client::HttpClient> {
 
 impl<'a, C: http_client::HttpClient + std::default::Default> Client<'a, C> {
     pub fn new(
+        api_url: &str,
         app_name: &str,
         instance_id: &str,
-        authorization: Option<&str>,
+        authorization: Option<String>,
     ) -> Result<Self, http_client::Error> {
         let builder = ClientBuilder::default();
         Ok(Self {
-            http: HTTP::new(
-                app_name.into(),
-                instance_id.into(),
-                authorization.map(|s| s.to_owned()),
-            )?,
+            api_url: api_url.into(),
+            app_name: app_name.into(),
+            instance_id: instance_id.into(),
+            http: HTTP::new(app_name.into(), instance_id.into(), authorization)?,
             cached_state: ArcSwapOption::from(None),
             strategies: builder.strategies,
         })
@@ -152,6 +155,26 @@ impl<'a, C: http_client::HttpClient + std::default::Default> Client<'a, C> {
             new_cache.insert(feature.name.clone(), memos);
         }
         self.cached_state.store(Some(Arc::new(new_cache)));
+        Ok(())
+    }
+
+    /// Register this client with the API endpoint.
+    pub async fn register(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+        // TODO permit customising metrics interval and then reflect that here.
+        let registration = Registration {
+            app_name: self.app_name.clone(),
+            instance_id: self.instance_id.clone(),
+            strategies: self.strategies.keys().map(|s| s.to_owned()).collect(),
+            ..Default::default()
+        };
+        let res = self
+            .http
+            .post(Registration::endpoint(&self.api_url))
+            .body_json(&registration)?
+            .await?;
+        if !res.status().is_success() {
+            return Err(anyhow::anyhow!("Failed to register with unleash API server").into());
+        }
         Ok(())
     }
 }
@@ -231,7 +254,13 @@ mod tests {
                 },
             ],
         };
-        let mut c = Client::<http_client::native::NativeClient>::new("foo", "test", None).unwrap();
+        let mut c = Client::<http_client::native::NativeClient>::new(
+            "http://127.0.0.1:1234/",
+            "foo",
+            "test",
+            None,
+        )
+        .unwrap();
         c.memoize(f.features).unwrap();
         let present: Context = Context {
             user_id: Some("present".into()),
@@ -284,7 +313,12 @@ mod tests {
         let mut builder = ClientBuilder::default();
         builder.strategy("reversed", &_reversed_uids);
         let mut client = builder
-            .into_client::<http_client::native::NativeClient>("foo", "test", None)
+            .into_client::<http_client::native::NativeClient>(
+                "http://127.0.0.1:1234/",
+                "foo",
+                "test",
+                None,
+            )
             .unwrap();
 
         let f = Features {

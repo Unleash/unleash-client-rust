@@ -62,10 +62,10 @@ pub struct Registration {
     #[serde(rename = "instanceId")]
     pub instance_id: String,
     #[serde(rename = "sdkVersion")]
-    sdk_version: String,
+    pub sdk_version: String,
     pub strategies: Vec<String>,
-    started: chrono::DateTime<chrono::Utc>,
-    interval: u64,
+    pub started: chrono::DateTime<chrono::Utc>,
+    pub interval: u64,
 }
 
 impl Registration {
