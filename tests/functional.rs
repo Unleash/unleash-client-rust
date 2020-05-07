@@ -32,8 +32,11 @@ mod tests {
             )?;
             client.register().await?;
             futures::future::join(client.poll(), async {
-                Delay::new(Duration::from_millis(1500)).await;
+                // Ensure we have features
+                Delay::new(Duration::from_millis(500)).await;
                 assert_eq!(true, client.is_enabled("default", None, false));
+                // Ensure the metrics get up-loaded
+                Delay::new(Duration::from_millis(500)).await;
                 client.stop_poll().await;
             })
             .await;

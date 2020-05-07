@@ -15,6 +15,8 @@ The unleash defined strategies are included, to support custom strategies
 use the `ClientBuilder` and call the `strategy` method to register your custom
 strategy memoization function.
 
+The crate documentation should be consulted for more detail.
+
 ## status
 
 Core Unleash API features work.
@@ -30,3 +32,13 @@ Missing Rustlang features
 
 Please note that this project is released with a Contributor Code of Conduct. By
 participating in this project you agree to abide by its terms.
+
+## Contributing
+
+PR's on Github as normal please. Cargo test to run the test suite, rustfmt code
+before submitting. To run the functional test suite:
+```
+docker-compose up -d
+UNLEASH_API_URL=http://127.0.0.1:4242/api UNLEASH_APP_NAME=fred UNLEASH_INSTANCE_ID=test cargo test --features functional  -- --nocapture
+```
+or similar.
