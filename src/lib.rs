@@ -83,3 +83,28 @@ pub mod config;
 pub mod context;
 pub mod http;
 pub mod strategy;
+
+// Exports for ergonomical use
+pub use crate::client::{Client, ClientBuilder};
+pub use crate::config::EnvironmentConfig;
+pub use crate::context::Context;
+pub use crate::strategy::Evaluate;
+
+/// For the complete minimalist
+///
+/// ```no_run
+/// use unleash_api_client::prelude::*;
+/// let config = EnvironmentConfig::from_env()?;
+/// let client = ClientBuilder::default()
+///     .into_client::<http_client::native::NativeClient>(
+///         &config.api_url,
+///         &config.app_name,
+///         &config.instance_id,
+///         config.secret,
+///         )?;
+/// # Ok::<(), Box<dyn std::error::Error + std::marker::Send + std::marker::Sync>>(())
+/// ```
+pub mod prelude {
+    pub use crate::client::ClientBuilder;
+    pub use crate::config::EnvironmentConfig;
+}
