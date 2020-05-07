@@ -52,14 +52,14 @@
 //!     let _ = simple_logger::init();
 //!     task::block_on(async {
 //!         let config = EnvironmentConfig::from_env()?;
-//!         let mut builder = client::ClientBuilder::default();
-//!         builder.strategy("reversed", Box::new(&_reversed_uids));
-//!         let client = builder.into_client::<http_client::native::NativeClient>(
-//!             &config.api_url,
-//!             &config.app_name,
-//!             &config.instance_id,
-//!             config.secret,
-//!         )?;
+//!         let client = client::ClientBuilder::default()
+//!             .strategy("reversed", Box::new(&_reversed_uids))
+//!             .into_client::<http_client::native::NativeClient>(
+//!                 &config.api_url,
+//!                 &config.app_name,
+//!                 &config.instance_id,
+//!                config.secret,
+//!             )?;
 //!         client.register().await?;
 //!         futures::future::join(client.poll(), async {
 //!             // Ensure we have initial load of features completed

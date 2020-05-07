@@ -41,12 +41,12 @@ impl ClientBuilder {
         })
     }
 
-    pub fn interval(&mut self, interval: u64) -> &mut Self {
+    pub fn interval(mut self, interval: u64) -> Self {
         self.interval = interval;
         self
     }
 
-    pub fn strategy(&mut self, name: &str, strategy: strategy::Strategy) -> &mut Self {
+    pub fn strategy(mut self, name: &str, strategy: strategy::Strategy) -> Self {
         self.strategies.insert(name.into(), strategy);
         self
     }
@@ -54,7 +54,7 @@ impl ClientBuilder {
 
 impl Default for ClientBuilder {
     fn default() -> ClientBuilder {
-        let mut result = ClientBuilder {
+        let result = ClientBuilder {
             interval: 15000,
             strategies: Default::default(),
         };
@@ -67,8 +67,7 @@ impl Default for ClientBuilder {
             .strategy("gradualRolloutUserId", Box::new(&strategy::user_id))
             .strategy("remoteAddress", Box::new(&strategy::remote_address))
             .strategy("userWithId", Box::new(&strategy::user_with_id))
-            .strategy("flexibleRollout", Box::new(&strategy::flexible_rollout));
-        result
+            .strategy("flexibleRollout", Box::new(&strategy::flexible_rollout))
     }
 }
 
@@ -534,9 +533,8 @@ mod tests {
     #[test]
     fn test_custom_strategy() {
         let _ = simple_logger::init();
-        let mut builder = ClientBuilder::default();
-        builder.strategy("reversed", Box::new(&_reversed_uids));
-        let client = builder
+        let client = ClientBuilder::default()
+            .strategy("reversed", Box::new(&_reversed_uids))
             .into_client::<http_client::native::NativeClient>(
                 "http://127.0.0.1:1234/",
                 "foo",
