@@ -11,8 +11,8 @@ tree.
 
 To use it in a sync program, run an async executor and `block_on()` the relevant
 calls. As the client specification requires sending background metrics to the
-API, you will need to arrange to call the `poll` method from a thread.
-Contributions to provide helpers to make this easier are welcome.
+API, you will need to arrange to call the `poll_for_updates` method from a
+thread as demonstrated in `examples/theads.rs`
 
 The unleash defined strategies are included, to support custom strategies
 use the `ClientBuilder` and call the `strategy` method to register your custom

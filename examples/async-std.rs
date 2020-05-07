@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
             config.secret,
         )?;
         client.register().await?;
-        futures::future::join(client.poll(), async {
+        futures::future::join(client.poll_for_updates(), async {
             // Ensure we have features for this demo.
             Delay::new(Duration::from_millis(500)).await;
             println!(

@@ -187,10 +187,11 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
                     if let Some(cached_state) = cached_state {
                         let cached_state = cached_state.clone();
                         if let Some(feature) = cached_state.features.get(feature_name) {
-                            // raced with *either* a poll() that added the feature
-                            // in the API server or another thread adding this same
-                            // metric memoisation; record against metrics here, but
-                            // still return default as consistent enough.
+                            // raced with *either* a poll_for_updates() that
+                            // added the feature in the API server or another
+                            // thread adding this same metric memoisation;
+                            // record against metrics here, but still return
+                            // default as consistent enough.
                             if default {
                                 feature.enabled.fetch_add(1, Ordering::Relaxed);
                             } else {
@@ -314,10 +315,14 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
         }
     }
 
-    /// poll the API endpoint for features.
+    /// Query the API endpoint for features and push metrics
     ///
-    /// exits at the next polling cycle after stop_poll is called().
-    pub async fn poll(&self) {
+    /// Immediately and then every self.interval milliseconds the API server is
+    /// queryed for features and the previous cycles metrics are uploaded.
+    ///
+    /// May be dropped, or will terminate at the next polling cycle after
+    /// stop_poll is called().
+    pub async fn poll_for_updates(&self) {
         // TODO: add an event / pipe to permit immediate exit.
         let endpoint = Features::endpoint(&self.api_url);
         let metrics_endpoint = Metrics::endpoint(&self.api_url);
@@ -385,10 +390,11 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
         Ok(())
     }
 
-    /// stop the poll() function.
+    /// stop the poll_for_updates() function.
     ///
-    /// If poll is not running, will spin-loop until poll is running, then signal it
-    /// to stop, then return.
+    /// If poll is not running, will wait-loop until poll_for_updates is
+    /// running, then signal it to stop, then return. Will wait for ever if
+    /// poll_for_updates never starts running.
     pub async fn stop_poll(&self) {
         loop {
             match self

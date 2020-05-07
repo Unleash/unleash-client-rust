@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     let handler = thread::spawn(move || {
         // thread code
         task::block_on(async {
-            poll_handle.poll().await;
+            poll_handle.poll_for_updates().await;
         });
     });
 
