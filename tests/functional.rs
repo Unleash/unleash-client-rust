@@ -32,7 +32,7 @@ mod tests {
             )?;
             client.register().await?;
             futures::future::join(client.poll(), async {
-                Delay::new(Duration::from_millis(500)).await;
+                Delay::new(Duration::from_millis(1500)).await;
                 assert_eq!(true, client.is_enabled("default", None, false));
                 client.stop_poll().await;
             })

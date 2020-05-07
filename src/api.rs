@@ -87,6 +87,29 @@ impl Default for Registration {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Metrics {
+    #[serde(rename = "appName")]
+    pub app_name: String,
+    #[serde(rename = "instanceId")]
+    pub instance_id: String,
+    pub bucket: MetricsBucket,
+}
+
+impl Metrics {
+    pub fn endpoint(api_url: &str) -> String {
+        format!("{}/client/metrics", api_url)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MetricsBucket {
+    pub start: chrono::DateTime<chrono::Utc>,
+    pub stop: chrono::DateTime<chrono::Utc>,
+    /// name: "yes"|"no": count
+    pub toggles: HashMap<String, HashMap<String, u64>>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::Registration;

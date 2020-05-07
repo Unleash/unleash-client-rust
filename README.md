@@ -8,16 +8,23 @@ client for it to facilitate using the API to control features in Rust programs.
 The client is written using async. To use it in a sync program, run an async
 executor and `block_on()` the relevant calls. As the client specification
 requires sending background metrics to the API, you will need to arrange to
-call the `submit_metrics` method periodically. Contributions to provide helpers
-to make this easier are welcome, but not on our roadmap.
+call the `poll` method from a thread. Contributions to provide helpers
+to make this easier are welcome.
 
 The unleash defined strategies are included, to support custom strategies
-implement the Strategy trait and insert the strategy into the Unleash.strategies
-collection.
+use the `ClientBuilder` and call the `strategy` method to register your custom
+strategy memoization function.
 
 ## status
 
-Current status - in development. 
+Core Unleash API features work.
+
+Missing Unleash specified features:
+- local serialised copy of toggles to survive restarts without network traffic.
+- variant support.
+
+Missing Rustlang features
+- validation of the SDK with threaded code rather than pure async.
 
 ## Code of conduct
 
