@@ -8,7 +8,6 @@ homepage = "https://github.com/cognitedata/unleash-client-rust/"
 keywords = ["continualdeployment"]
 license = "Apache-2.0"
 name = "unleash-api-client"
-publish = false
 readme = "README.md"
 repository = "https://github.com/cognitedata/unleash-client-rust/"
 version = "0.1.0"
