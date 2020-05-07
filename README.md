@@ -25,9 +25,6 @@ Missing Unleash specified features:
 - local serialised copy of toggles to survive restarts without network traffic.
 - variant support.
 
-Missing Rustlang features
-- validation of the SDK with threaded code rather than pure async.
-
 ## Code of conduct
 
 Please note that this project is released with a Contributor Code of Conduct. By

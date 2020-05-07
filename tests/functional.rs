@@ -8,17 +8,18 @@
 
 #[cfg(all(feature = "functional"))]
 mod tests {
-
-    use async_std::task;
+    use std::sync::Arc;
+    use std::thread;
     use std::time::Duration;
 
+    use async_std::task;
     use futures_timer::Delay;
 
     use unleash_api_client::client;
     use unleash_api_client::config::EnvironmentConfig;
 
     #[test]
-    fn test_register() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    fn test_smoke_async() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let _ = simple_logger::init();
         task::block_on(async {
             let config = EnvironmentConfig::from_env()?;
@@ -43,5 +44,47 @@ mod tests {
             println!("got metrics");
             Ok(())
         })
+    }
+
+    #[test]
+    fn test_smoke_threaded() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let _ = simple_logger::init();
+        let config = EnvironmentConfig::from_env()?;
+        let mut builder = client::ClientBuilder::default();
+        builder.interval(500);
+        let client = Arc::new(builder.into_client::<http_client::native::NativeClient>(
+            &config.api_url,
+            &config.app_name,
+            &config.instance_id,
+            config.secret,
+        )?);
+        task::block_on(async {
+            if let Err(e) = client.register().await {
+                return Err(e);
+            } else {
+                Ok(())
+            }
+        })?;
+        // Spin off a polling thread
+        let poll_handle = client.clone();
+        // let poll_handle = think.clone();
+        let handler = thread::spawn(move || {
+            // thread code
+            task::block_on(async {
+                poll_handle.poll().await;
+            });
+        });
+
+        // Ensure we have features
+        thread::sleep(Duration::from_millis(500));
+        assert_eq!(true, client.is_enabled("default", None, false));
+        // Ensure the metrics get up-loaded
+        thread::sleep(Duration::from_millis(500));
+        task::block_on(async {
+            client.stop_poll().await;
+        });
+        handler.join().unwrap();
+        println!("got metrics");
+        Ok(())
     }
 }

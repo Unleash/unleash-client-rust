@@ -12,20 +12,19 @@ use rand::Rng;
 use crate::context::Context;
 
 /// Memoise feature state for a strategy.
-pub type Strategy = dyn Fn(Option<HashMap<String, String>>) -> Box<Evaluate>;
+pub type Strategy =
+    Box<dyn Fn(Option<HashMap<String, String>>) -> Evaluate + Sync + Send + 'static>;
 /// Apply memoised state to a context.
-pub type Evaluate = dyn Fn(&Context) -> bool;
+pub type Evaluate = Box<dyn Fn(&Context) -> bool + Send + Sync + 'static>;
 
 /// https://unleash.github.io/docs/activation_strategy#default
-pub fn default<S: BuildHasher>(_: Option<HashMap<String, String, S>>) -> Box<Evaluate> {
+pub fn default<S: BuildHasher>(_: Option<HashMap<String, String, S>>) -> Evaluate {
     Box::new(|_: &Context| -> bool { true })
 }
 
 /// https://unleash.github.io/docs/activation_strategy#userwithid
 /// userIds: user,ids,to,match
-pub fn user_with_id<S: BuildHasher>(
-    parameters: Option<HashMap<String, String, S>>,
-) -> Box<Evaluate> {
+pub fn user_with_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     let mut uids: HashSet<String> = HashSet::new();
     if let Some(parameters) = parameters {
         if let Some(uids_list) = parameters.get("userIds") {
@@ -91,7 +90,7 @@ fn _partial_rollout(group: &str, variable: Option<&String>, rollout: u32) -> boo
 fn _session_id<S: BuildHasher>(
     parameters: Option<HashMap<String, String, S>>,
     rollout_key: &str,
-) -> Box<Evaluate> {
+) -> Evaluate {
     let (group, rollout) = _group_and_rollout(parameters, rollout_key);
     Box::new(move |context: &Context| -> bool {
         _partial_rollout(&group, context.session_id.as_ref(), rollout)
@@ -103,7 +102,7 @@ fn _session_id<S: BuildHasher>(
 fn _user_id<S: BuildHasher>(
     parameters: Option<HashMap<String, String, S>>,
     rollout_key: &str,
-) -> Box<Evaluate> {
+) -> Evaluate {
     let (group, rollout) = _group_and_rollout(parameters, rollout_key);
     Box::new(move |context: &Context| -> bool {
         _partial_rollout(&group, context.user_id.as_ref(), rollout)
@@ -116,7 +115,7 @@ fn _user_id<S: BuildHasher>(
 /// rollout: percentage
 pub fn flexible_rollout<S: BuildHasher>(
     parameters: Option<HashMap<String, String, S>>,
-) -> Box<Evaluate> {
+) -> Evaluate {
     let unwrapped_parameters = if let Some(parameters) = &parameters {
         parameters
     } else {
@@ -151,14 +150,14 @@ pub fn flexible_rollout<S: BuildHasher>(
 /// https://unleash.github.io/docs/activation_strategy#gradualrolloutuserid
 /// percentage: 0-100
 /// groupId: hash key
-pub fn user_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Box<Evaluate> {
+pub fn user_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     _user_id(parameters, "percentage")
 }
 
 /// https://unleash.github.io/docs/activation_strategy#gradualrolloutsessionid
 /// percentage: 0-100
 /// groupId: hash key
-pub fn session_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Box<Evaluate> {
+pub fn session_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     _session_id(parameters, "percentage")
 }
 
@@ -167,7 +166,7 @@ pub fn session_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>
 pub fn _random<S: BuildHasher>(
     parameters: Option<HashMap<String, String, S>>,
     rollout_key: &str,
-) -> Box<Evaluate> {
+) -> Evaluate {
     let mut pct = 0;
     if let Some(parameters) = parameters {
         if let Some(pct_str) = parameters.get(rollout_key) {
@@ -185,15 +184,13 @@ pub fn _random<S: BuildHasher>(
 
 /// https://unleash.github.io/docs/activation_strategy#gradualrolloutrandom
 /// percentage: percentage 0-100
-pub fn random<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Box<Evaluate> {
+pub fn random<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     _random(parameters, "percentage")
 }
 
 /// https://unleash.github.io/docs/activation_strategy#remoteaddress
 /// IPS: 1.2.3.4,AB::CD::::EF,1.2/8
-pub fn remote_address<S: BuildHasher>(
-    parameters: Option<HashMap<String, String, S>>,
-) -> Box<Evaluate> {
+pub fn remote_address<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     // TODO: this could be optimised given the inherent radix structure, but its
     // not exactly hot-path.
     let mut ips: Vec<ipaddress::IPAddress> = Vec::new();
@@ -222,7 +219,7 @@ pub fn remote_address<S: BuildHasher>(
 
 /// https://unleash.github.io/docs/activation_strategy#applicationhostname
 /// hostNames: names,of,hosts
-pub fn hostname<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Box<Evaluate> {
+pub fn hostname<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     let mut result = false;
     hostname::get().ok().and_then(|this_hostname| {
         parameters.map(|parameters| {

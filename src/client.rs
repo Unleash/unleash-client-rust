@@ -16,19 +16,19 @@ use crate::context::Context;
 use crate::http::HTTP;
 use crate::strategy;
 
-pub struct ClientBuilder<'a> {
+pub struct ClientBuilder {
     interval: u64,
-    strategies: HashMap<String, &'a strategy::Strategy>,
+    strategies: HashMap<String, strategy::Strategy>,
 }
 
-impl<'a> ClientBuilder<'a> {
+impl ClientBuilder {
     pub fn into_client<C: http_client::HttpClient + Default>(
         self,
         api_url: &str,
         app_name: &str,
         instance_id: &str,
         authorization: Option<String>,
-    ) -> Result<Client<'a, C>, http_client::Error> {
+    ) -> Result<Client<C>, http_client::Error> {
         Ok(Client {
             api_url: api_url.into(),
             app_name: app_name.into(),
@@ -46,34 +46,34 @@ impl<'a> ClientBuilder<'a> {
         self
     }
 
-    pub fn strategy(&mut self, name: &str, strategy: &'a strategy::Strategy) -> &mut Self {
+    pub fn strategy(&mut self, name: &str, strategy: strategy::Strategy) -> &mut Self {
         self.strategies.insert(name.into(), strategy);
         self
     }
 }
 
-impl<'a> Default for ClientBuilder<'a> {
-    fn default() -> ClientBuilder<'a> {
+impl Default for ClientBuilder {
+    fn default() -> ClientBuilder {
         let mut result = ClientBuilder {
             interval: 15000,
             strategies: Default::default(),
         };
         result
-            .strategy("default", &strategy::default)
-            .strategy("applicationHostname", &strategy::hostname)
-            .strategy("default", &strategy::default)
-            .strategy("gradualRolloutRandom", &strategy::random)
-            .strategy("gradualRolloutSessionId", &strategy::session_id)
-            .strategy("gradualRolloutUserId", &strategy::user_id)
-            .strategy("remoteAddress", &strategy::remote_address)
-            .strategy("userWithId", &strategy::user_with_id)
-            .strategy("flexibleRollout", &strategy::flexible_rollout);
+            .strategy("default", Box::new(&strategy::default))
+            .strategy("applicationHostname", Box::new(&strategy::hostname))
+            .strategy("default", Box::new(&strategy::default))
+            .strategy("gradualRolloutRandom", Box::new(&strategy::random))
+            .strategy("gradualRolloutSessionId", Box::new(&strategy::session_id))
+            .strategy("gradualRolloutUserId", Box::new(&strategy::user_id))
+            .strategy("remoteAddress", Box::new(&strategy::remote_address))
+            .strategy("userWithId", Box::new(&strategy::user_with_id))
+            .strategy("flexibleRollout", Box::new(&strategy::flexible_rollout));
         result
     }
 }
 
 struct CachedFeature {
-    strategies: Arc<Vec<Box<strategy::Evaluate>>>,
+    strategies: Arc<Vec<strategy::Evaluate>>,
     // unknown features are tracked for metrics (so the server can see that they
     // are being used). They require specific logic (see is_enabled).
     unknown: bool,
@@ -89,7 +89,7 @@ struct CachedState {
     features: HashMap<String, CachedFeature>,
 }
 
-pub struct Client<'a, C: http_client::HttpClient> {
+pub struct Client<C: http_client::HttpClient> {
     api_url: String,
     app_name: String,
     instance_id: String,
@@ -97,12 +97,14 @@ pub struct Client<'a, C: http_client::HttpClient> {
     polling: AtomicBool,
     http: HTTP<C>,
     // known strategies: strategy_name : memoiser
-    strategies: Mutex<HashMap<String, &'a strategy::Strategy>>,
+    strategies: Mutex<HashMap<String, strategy::Strategy>>,
     // memoised state: feature_name: [callback, callback, ...]
     cached_state: ArcSwapOption<CachedState>,
 }
 
-impl<'a, C: http_client::HttpClient + std::default::Default> Client<'a, C> {
+unsafe impl<C: http_client::HttpClient + std::default::Default> Sync for Client<C> {}
+
+impl<C: http_client::HttpClient + std::default::Default> Client<C> {
     pub fn new(
         api_url: &str,
         app_name: &str,
@@ -360,7 +362,6 @@ impl<'a, C: http_client::HttpClient + std::default::Default> Client<'a, C> {
 
     /// Register this client with the API endpoint.
     pub async fn register(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-        // TODO permit customising metrics interval and then reflect that here.
         let registration = Registration {
             app_name: self.app_name.clone(),
             instance_id: self.instance_id.clone(),
@@ -513,7 +514,7 @@ mod tests {
 
     fn _reversed_uids<S: BuildHasher>(
         parameters: Option<HashMap<String, String, S>>,
-    ) -> Box<strategy::Evaluate> {
+    ) -> strategy::Evaluate {
         let mut uids: HashSet<String> = HashSet::new();
         if let Some(parameters) = parameters {
             if let Some(uids_list) = parameters.get("userIds") {
@@ -534,7 +535,7 @@ mod tests {
     fn test_custom_strategy() {
         let _ = simple_logger::init();
         let mut builder = ClientBuilder::default();
-        builder.strategy("reversed", &_reversed_uids);
+        builder.strategy("reversed", Box::new(&_reversed_uids));
         let client = builder
             .into_client::<http_client::native::NativeClient>(
                 "http://127.0.0.1:1234/",
