@@ -18,6 +18,12 @@ pub struct EnvironmentConfig {
 }
 
 impl EnvironmentConfig {
+    /// Retrieve a configuration from environment variables.alloc
+    ///
+    /// UNLEASH_API_URL: http://host.example.com:1234/api
+    /// UNLEASH_APP_NAME: example-app
+    /// UNLEASH_INSTANCE_NAME: instance-512
+    /// UNLEASH_CLIENT_SECRET: unset | some-secret-value
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let mut result = EnvironmentConfig::default();
         let api_url = env::var("UNLEASH_API_URL");

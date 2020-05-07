@@ -41,9 +41,12 @@ version = "0.4.11"
 features = ["derive"]
 version = "1.0"
 
+[dependencies.tokio]
+features = ["rt-threaded", "macros"] 
+version = "0.2.20"
+
 [dev-dependencies]
 simple_logger = "1.6.0"
 
 [features]
 functional = []
-

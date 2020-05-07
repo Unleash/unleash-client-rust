@@ -5,11 +5,14 @@ client for it to facilitate using the API to control features in Rust programs.
 
 ## Client overview
 
-The client is written using async. To use it in a sync program, run an async
-executor and `block_on()` the relevant calls. As the client specification
-requires sending background metrics to the API, you will need to arrange to
-call the `poll` method from a thread. Contributions to provide helpers
-to make this easier are welcome.
+The client is written using async. Any std compatible async runtime should be
+compatible. Examples with async-std and tokio are in the examples/ in the source
+tree.
+
+To use it in a sync program, run an async executor and `block_on()` the relevant
+calls. As the client specification requires sending background metrics to the
+API, you will need to arrange to call the `poll` method from a thread.
+Contributions to provide helpers to make this easier are welcome.
 
 The unleash defined strategies are included, to support custom strategies
 use the `ClientBuilder` and call the `strategy` method to register your custom
