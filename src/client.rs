@@ -197,6 +197,7 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
                             } else {
                                 feature.disabled.fetch_add(1, Ordering::Relaxed);
                             }
+                            Some(cached_state)
                         } else {
                             // still not present; add it
                             let stub_feature = CachedFeature {
@@ -226,8 +227,8 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
                                 );
                             }
                             new_state.features.insert(feature_name.into(), stub_feature);
+                            Some(Arc::new(new_state))
                         }
-                        Some(cached_state)
                     } else {
                         None
                     }

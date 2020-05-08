@@ -105,7 +105,6 @@ fn batch(c: &mut Criterion) {
             for cpu in 0..cpus {
                 let thread_client = client.clone();
                 let feature = format!("flexible{}", cpu);
-                // println!("{}", feature);
                 let handle = thread::spawn(move || {
                     let context = Context {
                         user_id: Some(thread_rng().sample_iter(&Alphanumeric).take(30).collect()),
@@ -113,7 +112,6 @@ fn batch(c: &mut Criterion) {
                     };
                     for _ in 0..iterations {
                         thread_client.is_enabled(&feature, Some(&context), false);
-                        // thread::sleep(Duration::from_nanos(1));
                     }
                 });
                 threads.push(handle);
