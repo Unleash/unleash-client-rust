@@ -16,7 +16,7 @@ version = "0.1.0"
 status = "experimental"
 
 [dependencies]
-anyhow = "*"
+anyhow = "1.0.28"
 arc-swap = "0.4.6"
 async-std = "1.5.0"
 futures = "0.3.4"
