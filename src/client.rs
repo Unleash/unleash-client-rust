@@ -239,7 +239,10 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
     /// Memoize new features into the cached state
     ///
     /// Interior mutability is used, via the arc-swap crate.
-    fn memoize(
+    ///
+    /// Note that this is primarily public to facilitate benchmarking;
+    /// poll_for_updates is the usual way in which memoize will be called.
+    pub fn memoize(
         &self,
         features: Vec<Feature>,
     ) -> Result<Option<Metrics>, Box<dyn std::error::Error>> {
