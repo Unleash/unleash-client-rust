@@ -101,8 +101,6 @@ pub struct Client<C: http_client::HttpClient> {
     cached_state: ArcSwapOption<CachedState>,
 }
 
-unsafe impl<C: http_client::HttpClient + std::default::Default> Sync for Client<C> {}
-
 impl<C: http_client::HttpClient + std::default::Default> Client<C> {
     pub fn new(
         api_url: &str,
