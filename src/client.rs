@@ -72,7 +72,7 @@ impl Default for ClientBuilder {
 }
 
 struct CachedFeature {
-    strategies: Arc<Vec<strategy::Evaluate>>,
+    strategies: Vec<strategy::Evaluate>,
     // unknown features are tracked for metrics (so the server can see that they
     // are being used). They require specific logic (see is_enabled).
     unknown: bool,
@@ -202,7 +202,7 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
                                 disabled: AtomicU64::new(if default { 0 } else { 1 }),
                                 enabled: AtomicU64::new(if default { 1 } else { 0 }),
                                 unknown: true,
-                                strategies: Arc::new(vec![]),
+                                strategies: vec![],
                             };
                             // Build up a new cached state
                             let mut new_state = CachedState {
@@ -253,7 +253,7 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
         for feature in features {
             if !feature.enabled {
                 // no strategies == return false per the unleash example code;
-                let strategies = Arc::new(vec![]);
+                let strategies = vec![];
                 let cached_feature = CachedFeature {
                     strategies,
                     disabled: AtomicU64::new(0),
@@ -273,7 +273,7 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
                 // TODO: add a logging layer and log it.
             }
             let cached_feature = CachedFeature {
-                strategies: Arc::new(strategies),
+                strategies: strategies,
                 disabled: AtomicU64::new(0),
                 enabled: AtomicU64::new(0),
                 unknown: false,

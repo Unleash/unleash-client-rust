@@ -15,7 +15,25 @@ use crate::context::Context;
 pub type Strategy =
     Box<dyn Fn(Option<HashMap<String, String>>) -> Evaluate + Sync + Send + 'static>;
 /// Apply memoised state to a context.
-pub type Evaluate = Box<dyn Fn(&Context) -> bool + Send + Sync + 'static>;
+pub trait Evaluator: Fn(&Context) -> bool {
+    fn clone_boxed(&self) -> Box<dyn Evaluator + Send + Sync + 'static>;
+}
+pub type Evaluate = Box<dyn Evaluator + Send + Sync + 'static>;
+
+impl<T> Evaluator for T
+where
+    T: 'static + Clone + Sync + Send + Fn(&Context) -> bool,
+{
+    fn clone_boxed(&self) -> Box<dyn Evaluator + Send + Sync + 'static> {
+        Box::new(T::clone(self))
+    }
+}
+
+impl Clone for Box<dyn Evaluator + Send + Sync + 'static> {
+    fn clone(&self) -> Self {
+        self.as_ref().clone_boxed()
+    }
+}
 
 /// https://unleash.github.io/docs/activation_strategy#default
 pub fn default<S: BuildHasher>(_: Option<HashMap<String, String, S>>) -> Evaluate {
