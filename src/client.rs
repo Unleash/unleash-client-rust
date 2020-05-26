@@ -273,7 +273,7 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
                 // TODO: add a logging layer and log it.
             }
             let cached_feature = CachedFeature {
-                strategies: strategies,
+                strategies,
                 disabled: AtomicU64::new(0),
                 enabled: AtomicU64::new(0),
                 unknown: false,
@@ -309,7 +309,7 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
             let metrics = Metrics {
                 app_name: self.app_name.clone(),
                 instance_id: self.instance_id.clone(),
-                bucket: bucket,
+                bucket,
             };
             Ok(Some(metrics))
         } else {
