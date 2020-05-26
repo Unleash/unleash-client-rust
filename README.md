@@ -22,7 +22,7 @@ The crate documentation should be consulted for more detail.
 
 ## status
 
-Core Unleash API features work.
+Core Unleash API features work, with Rust 1.42 or above.
 
 Missing Unleash specified features:
 - local serialised copy of toggles to survive restarts without network traffic.
