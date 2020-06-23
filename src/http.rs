@@ -26,9 +26,9 @@ impl<C: http_client::HttpClient + std::default::Default> HTTP<C> {
             app_name,
             instance_id,
             authorization,
-            authorization_header: headers::HeaderName::from_ascii("authorization".into())?,
-            app_name_header: headers::HeaderName::from_ascii("appname".into())?,
-            instance_id_header: headers::HeaderName::from_ascii("instance_id".into())?,
+            authorization_header: headers::HeaderName::from_bytes("authorization".into())?,
+            app_name_header: headers::HeaderName::from_bytes("appname".into())?,
+            instance_id_header: headers::HeaderName::from_bytes("instance_id".into())?,
         })
     }
 
@@ -37,10 +37,10 @@ impl<C: http_client::HttpClient + std::default::Default> HTTP<C> {
         let request = self
             .client
             .get(uri)
-            .set_header(self.app_name_header.clone(), &self.app_name)
-            .set_header(self.instance_id_header.clone(), &self.instance_id);
+            .set_header(self.app_name_header.clone(), self.app_name.as_str())
+            .set_header(self.instance_id_header.clone(), self.instance_id.as_str());
         if let Some(auth) = &self.authorization {
-            request.set_header(self.authorization_header.clone(), auth)
+            request.set_header(self.authorization_header.clone(), auth.as_str())
         } else {
             request
         }
@@ -51,10 +51,10 @@ impl<C: http_client::HttpClient + std::default::Default> HTTP<C> {
         let request = self
             .client
             .post(uri)
-            .set_header(self.app_name_header.clone(), &self.app_name)
-            .set_header(self.instance_id_header.clone(), &self.instance_id);
+            .set_header(self.app_name_header.clone(), self.app_name.as_str())
+            .set_header(self.instance_id_header.clone(), self.instance_id.as_str());
         if let Some(auth) = &self.authorization {
-            request.set_header(self.authorization_header.clone(), auth)
+            request.set_header(self.authorization_header.clone(), auth.as_str())
         } else {
             request
         }
