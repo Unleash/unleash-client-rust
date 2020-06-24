@@ -8,10 +8,18 @@
 use std::time::Duration;
 
 use async_std::task;
+use enum_map::Enum;
 use futures_timer::Delay;
+use serde::{Deserialize, Serialize};
 
 use unleash_api_client::client;
 use unleash_api_client::config::EnvironmentConfig;
+
+#[allow(non_camel_case_types)]
+#[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+enum UserFeatures {
+    default,
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     let _ = simple_logger::init();
@@ -19,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let config = EnvironmentConfig::from_env()?;
         let client = client::ClientBuilder::default()
             .interval(500)
-            .into_client::<http_client::native::NativeClient>(
+            .into_client::<http_client::native::NativeClient, UserFeatures>(
             &config.api_url,
             &config.app_name,
             &config.instance_id,
@@ -31,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
             Delay::new(Duration::from_millis(500)).await;
             println!(
                 "feature 'default' is {}",
-                client.is_enabled("default", None, false)
+                client.is_enabled(UserFeatures::default, None, false)
             );
             // Wait to allow metrics upload
             Delay::new(Duration::from_millis(500)).await;
