@@ -19,7 +19,7 @@ impl Features {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 // #[serde(deny_unknown_fields)]
 pub struct Feature {
     pub name: String,
@@ -31,14 +31,14 @@ pub struct Feature {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 // #[serde(deny_unknown_fields)]
 pub struct Strategy {
     pub name: String,
     pub parameters: Option<HashMap<String, String>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 // #[serde(deny_unknown_fields)]
 pub struct Variant {
     pub name: String,
@@ -47,7 +47,7 @@ pub struct Variant {
     pub overrides: Option<Vec<VariantOverride>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 // #[serde(deny_unknown_fields)]
 pub struct VariantOverride {
     #[serde(rename = "contextName")]

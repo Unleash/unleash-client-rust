@@ -25,6 +25,7 @@ The crate documentation should be consulted for more detail.
 Core Unleash API features work, with Rust 1.42 or above.
 
 Missing Unleash specified features:
+
 - local serialised copy of toggles to survive restarts without network traffic.
 - variant support.
 
@@ -37,8 +38,10 @@ participating in this project you agree to abide by its terms.
 
 PR's on Github as normal please. Cargo test to run the test suite, rustfmt code
 before submitting. To run the functional test suite:
-```
+
+```shell
 docker-compose up -d
 UNLEASH_API_URL=http://127.0.0.1:4242/api UNLEASH_APP_NAME=fred UNLEASH_INSTANCE_ID=test cargo test --features functional  -- --nocapture
 ```
+
 or similar.

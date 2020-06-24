@@ -2,14 +2,18 @@
 //! The primary interface for users of the library.
 use std::collections::hash_map::HashMap;
 use std::default::Default;
+use std::fmt::Debug;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use arc_swap::ArcSwapOption;
 use chrono::Utc;
+use enum_map::{Enum, EnumMap};
 use futures_timer::Delay;
 use log::{debug, trace, warn};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use crate::api::{Feature, Features, Metrics, MetricsBucket, Registration};
 use crate::context::Context;
@@ -17,21 +21,27 @@ use crate::http::HTTP;
 use crate::strategy;
 
 pub struct ClientBuilder {
+    enable_str_features: bool,
     interval: u64,
     strategies: HashMap<String, strategy::Strategy>,
 }
 
 impl ClientBuilder {
-    pub fn into_client<C: http_client::HttpClient + Default>(
+    pub fn into_client<C, F>(
         self,
         api_url: &str,
         app_name: &str,
         instance_id: &str,
         authorization: Option<String>,
-    ) -> Result<Client<C>, http_client::Error> {
+    ) -> Result<Client<C, F>, http_client::Error>
+    where
+        C: http_client::HttpClient + Default,
+        F: Enum<CachedFeature> + Debug + DeserializeOwned + Serialize,
+    {
         Ok(Client {
             api_url: api_url.into(),
             app_name: app_name.into(),
+            enable_str_features: self.enable_str_features,
             instance_id: instance_id.into(),
             interval: self.interval,
             polling: AtomicBool::new(false),
@@ -39,6 +49,11 @@ impl ClientBuilder {
             cached_state: ArcSwapOption::from(None),
             strategies: Mutex::new(self.strategies),
         })
+    }
+
+    pub fn enable_string_features(mut self) -> Self {
+        self.enable_str_features = true;
+        self
     }
 
     pub fn interval(mut self, interval: u64) -> Self {
@@ -55,6 +70,7 @@ impl ClientBuilder {
 impl Default for ClientBuilder {
     fn default() -> ClientBuilder {
         let result = ClientBuilder {
+            enable_str_features: false,
             interval: 15000,
             strategies: Default::default(),
         };
@@ -71,11 +87,12 @@ impl Default for ClientBuilder {
     }
 }
 
-struct CachedFeature {
+#[derive(Default)]
+pub struct CachedFeature {
     strategies: Vec<strategy::Evaluate>,
     // unknown features are tracked for metrics (so the server can see that they
     // are being used). They require specific logic (see is_enabled).
-    unknown: bool,
+    known: bool,
     // Tracks metrics during a refresh interval. If the AtomicBool updates show
     // to be a contention point then thread-sharded counters with a gather phase
     // on submission will be the next logical progression.
@@ -83,14 +100,25 @@ struct CachedFeature {
     disabled: AtomicU64,
 }
 
-struct CachedState {
+struct CachedState<F>
+where
+    F: Enum<CachedFeature>,
+{
     start: chrono::DateTime<chrono::Utc>,
-    features: HashMap<String, CachedFeature>,
+    // user supplies F defining the features they need
+    // The default value of F is defined as 'fallback to string lookups'.
+    features: EnumMap<F, CachedFeature>,
+    str_features: HashMap<String, CachedFeature>,
 }
 
-pub struct Client<C: http_client::HttpClient> {
+pub struct Client<C, F>
+where
+    C: http_client::HttpClient,
+    F: Enum<CachedFeature> + Debug + DeserializeOwned + Serialize,
+{
     api_url: String,
     app_name: String,
+    enable_str_features: bool,
     instance_id: String,
     interval: u64,
     polling: AtomicBool,
@@ -98,33 +126,18 @@ pub struct Client<C: http_client::HttpClient> {
     // known strategies: strategy_name : memoiser
     strategies: Mutex<HashMap<String, strategy::Strategy>>,
     // memoised state: feature_name: [callback, callback, ...]
-    cached_state: ArcSwapOption<CachedState>,
+    cached_state: ArcSwapOption<CachedState<F>>,
 }
 
-impl<C: http_client::HttpClient + std::default::Default> Client<C> {
-    pub fn new(
-        api_url: &str,
-        app_name: &str,
-        instance_id: &str,
-        authorization: Option<String>,
-    ) -> Result<Self, http_client::Error> {
-        let builder = ClientBuilder::default();
-        Ok(Self {
-            api_url: api_url.into(),
-            app_name: app_name.into(),
-            instance_id: instance_id.into(),
-            interval: 15000,
-            polling: AtomicBool::new(false),
-            http: HTTP::new(app_name.into(), instance_id.into(), authorization)?,
-            cached_state: ArcSwapOption::from(None),
-            strategies: Mutex::new(builder.strategies),
-        })
-    }
-
-    pub fn is_enabled(&self, feature_name: &str, context: Option<&Context>, default: bool) -> bool {
+impl<C, F> Client<C, F>
+where
+    C: http_client::HttpClient + std::default::Default,
+    F: Enum<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
+{
+    pub fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
         trace!(
-            "is_enabled: feature {} default {}, context {:?}",
-            feature_name,
+            "is_enabled: feature {:?} default {}, context {:?}",
+            feature_enum,
             default,
             context
         );
@@ -136,7 +149,70 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
             trace!("is_enabled: No API state");
             return false;
         };
-        if let Some(feature) = cache.features.get(feature_name) {
+
+        let feature = &cache.features[feature_enum.clone()];
+        let default_context: Context = Default::default();
+        let context = context.unwrap_or(&default_context);
+        for memo in feature.strategies.iter() {
+            if memo(context) {
+                debug!(
+                    "is_enabled: feature {:?} enabled by memo {:p}, context {:?}",
+                    feature_enum, memo, context
+                );
+                feature.enabled.fetch_add(1, Ordering::Relaxed);
+                return true;
+            } else {
+                feature.disabled.fetch_add(1, Ordering::Relaxed);
+                trace!(
+                    "is_enabled: feature {:?} not enabled by memo {:p}, context {:?}",
+                    feature_enum,
+                    memo,
+                    context
+                );
+            }
+        }
+        if !feature.known {
+            trace!(
+                "is_enabled: Unknown feature {:?}, using default {}",
+                feature_enum,
+                default
+            );
+            if default {
+                feature.enabled.fetch_add(1, Ordering::Relaxed);
+            } else {
+                feature.disabled.fetch_add(1, Ordering::Relaxed);
+            }
+            default
+        } else {
+            false
+        }
+    }
+
+    pub fn is_enabled_str(
+        &self,
+        feature_name: &str,
+        context: Option<&Context>,
+        default: bool,
+    ) -> bool {
+        trace!(
+            "is_enabled: feature_str {:?} default {}, context {:?}",
+            feature_name,
+            default,
+            context
+        );
+        assert!(
+            self.enable_str_features,
+            "String feature lookup not enabled"
+        );
+        let cache = self.cached_state.load();
+        let cache = if let Some(cache) = &*cache {
+            cache
+        } else {
+            // No API state loaded
+            trace!("is_enabled: No API state");
+            return false;
+        };
+        if let Some(feature) = cache.str_features.get(feature_name) {
             let default_context: Context = Default::default();
             let context = context.unwrap_or(&default_context);
             for memo in feature.strategies.iter() {
@@ -157,7 +233,7 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
                     );
                 }
             }
-            if feature.unknown {
+            if !feature.known {
                 trace!(
                     "is_enabled: Unknown feature {}, using default {}",
                     feature_name,
@@ -180,11 +256,11 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
             );
             // Insert a compiled feature to track metrics.
             self.cached_state
-                .rcu(|cached_state: &Option<Arc<CachedState>>| {
+                .rcu(|cached_state: &Option<Arc<CachedState<F>>>| {
                     // Did someone swap None in ?
                     if let Some(cached_state) = cached_state {
                         let cached_state = cached_state.clone();
-                        if let Some(feature) = cached_state.features.get(feature_name) {
+                        if let Some(feature) = cached_state.str_features.get(feature_name) {
                             // raced with *either* a poll_for_updates() that
                             // added the feature in the API server or another
                             // thread adding this same metric memoisation;
@@ -198,33 +274,41 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
                             Some(cached_state)
                         } else {
                             // still not present; add it
-                            let stub_feature = CachedFeature {
-                                disabled: AtomicU64::new(if default { 0 } else { 1 }),
-                                enabled: AtomicU64::new(if default { 1 } else { 0 }),
-                                unknown: true,
-                                strategies: vec![],
-                            };
                             // Build up a new cached state
                             let mut new_state = CachedState {
                                 start: cached_state.start,
-                                features: HashMap::new(),
+                                features: EnumMap::new(),
+                                str_features: HashMap::new(),
                             };
-                            for (name, feature) in &cached_state.features {
-                                new_state.features.insert(
-                                    name.clone(),
-                                    CachedFeature {
-                                        disabled: AtomicU64::new(
-                                            feature.disabled.load(Ordering::Relaxed),
-                                        ),
-                                        enabled: AtomicU64::new(
-                                            feature.enabled.load(Ordering::Relaxed),
-                                        ),
-                                        unknown: feature.unknown,
-                                        strategies: feature.strategies.clone(),
-                                    },
-                                );
+                            fn cloned_feature(feature: &CachedFeature) -> CachedFeature {
+                                CachedFeature {
+                                    disabled: AtomicU64::new(
+                                        feature.disabled.load(Ordering::Relaxed),
+                                    ),
+                                    enabled: AtomicU64::new(
+                                        feature.enabled.load(Ordering::Relaxed),
+                                    ),
+                                    known: feature.known,
+                                    strategies: feature.strategies.clone(),
+                                }
+                            };
+                            for (key, feature) in &cached_state.features {
+                                new_state.features[key] = cloned_feature(&feature);
                             }
-                            new_state.features.insert(feature_name.into(), stub_feature);
+                            for (name, feature) in &cached_state.str_features {
+                                new_state
+                                    .str_features
+                                    .insert(name.clone(), cloned_feature(&feature));
+                            }
+                            let stub_feature = CachedFeature {
+                                disabled: AtomicU64::new(if default { 0 } else { 1 }),
+                                enabled: AtomicU64::new(if default { 1 } else { 0 }),
+                                known: false,
+                                strategies: vec![],
+                            };
+                            new_state
+                                .str_features
+                                .insert(feature_name.into(), stub_feature);
                             Some(Arc::new(new_state))
                         }
                     } else {
@@ -248,41 +332,48 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
         let now = Utc::now();
         trace!("memoize: start with {} features", features.len());
         let source_strategies = self.strategies.lock().unwrap();
-        let mut cached_features: HashMap<String, CachedFeature> = HashMap::new();
+        let mut unenumerated_features: HashMap<String, CachedFeature> = HashMap::new();
+        let mut cached_features: EnumMap<F, CachedFeature> = EnumMap::new();
         // HashMap<String, Vec<Box<strategy::Evaluate>>> = HashMap::new();
         for feature in features {
-            if !feature.enabled {
-                // no strategies == return false per the unleash example code;
-                let strategies = vec![];
-                let cached_feature = CachedFeature {
-                    strategies,
-                    disabled: AtomicU64::new(0),
-                    enabled: AtomicU64::new(0),
-                    unknown: false,
-                };
-                cached_features.insert(feature.name.clone(), cached_feature);
-                continue;
-            }
-            // TODO add variant support
-            let mut strategies = vec![];
-            for api_strategy in feature.strategies {
-                if let Some(code_strategy) = source_strategies.get(&api_strategy.name) {
-                    strategies.push(code_strategy(api_strategy.parameters));
+            let cached_feature = {
+                if !feature.enabled {
+                    // no strategies == return false per the unleash example code;
+                    let strategies = vec![];
+                    CachedFeature {
+                        strategies,
+                        disabled: AtomicU64::new(0),
+                        enabled: AtomicU64::new(0),
+                        known: true,
+                    }
+                } else {
+                    // TODO add variant support
+                    let mut strategies = vec![];
+                    for api_strategy in feature.strategies {
+                        if let Some(code_strategy) = source_strategies.get(&api_strategy.name) {
+                            strategies.push(code_strategy(api_strategy.parameters));
+                        }
+                        // Graceful degradation: ignore this unknown strategy.
+                        // TODO: add a logging layer and log it.
+                    }
+                    CachedFeature {
+                        strategies,
+                        disabled: AtomicU64::new(0),
+                        enabled: AtomicU64::new(0),
+                        known: true,
+                    }
                 }
-                // Graceful degradation: ignore this unknown strategy.
-                // TODO: add a logging layer and log it.
-            }
-            let cached_feature = CachedFeature {
-                strategies,
-                disabled: AtomicU64::new(0),
-                enabled: AtomicU64::new(0),
-                unknown: false,
             };
-            cached_features.insert(feature.name.clone(), cached_feature);
+            if let Ok(feature_enum) = serde_plain::from_str::<F>(feature.name.as_str()) {
+                cached_features[feature_enum] = cached_feature;
+            } else {
+                unenumerated_features.insert(feature.name.clone(), cached_feature);
+            }
         }
         let new_cache = CachedState {
             start: now,
             features: cached_features,
+            str_features: unenumerated_features,
         };
         // Now we have the new cache compiled, swap it in.
         let old = self.cached_state.swap(Some(Arc::new(new_cache)));
@@ -294,7 +385,20 @@ impl<C: http_client::HttpClient + std::default::Default> Client<C> {
                 stop: now,
                 toggles: HashMap::new(),
             };
-            for (name, feature) in &old.features {
+            for (key, feature) in &old.features {
+                bucket.toggles.insert(
+                    // Is this unwrap safe? Not sure.
+                    serde_plain::to_string(&key).unwrap(),
+                    [
+                        ("yes".into(), feature.enabled.load(Ordering::Relaxed)),
+                        ("no".into(), feature.disabled.load(Ordering::Relaxed)),
+                    ]
+                    .iter()
+                    .cloned()
+                    .collect(),
+                );
+            }
+            for (name, feature) in &old.str_features {
                 bucket.toggles.insert(
                     name.clone(),
                     [
@@ -420,17 +524,17 @@ mod tests {
     use std::collections::hash_set::HashSet;
     use std::hash::BuildHasher;
 
+    use enum_map::Enum;
     use maplit::hashmap;
+    use serde::{Deserialize, Serialize};
 
-    use super::{Client, ClientBuilder};
+    use super::ClientBuilder;
     use crate::api::{Feature, Features, Strategy};
     use crate::context::Context;
     use crate::strategy;
 
-    #[test]
-    fn test_memoization() {
-        let _ = simple_logger::init();
-        let f = Features {
+    fn features() -> Features {
+        Features {
             version: 1,
             features: vec![
                 Feature {
@@ -484,14 +588,33 @@ mod tests {
                     }],
                 },
             ],
-        };
-        let c = Client::<http_client::native::NativeClient>::new(
-            "http://127.0.0.1:1234/",
-            "foo",
-            "test",
-            None,
-        )
-        .unwrap();
+        }
+    }
+
+    #[test]
+    fn test_memoization_enum() {
+        let _ = simple_logger::init();
+        let f = features();
+        // with an enum
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum UserFeatures {
+            unknown,
+            default,
+            userWithId,
+            #[serde(rename = "userWithId+default")]
+            userWithId_Default,
+            disabled,
+        }
+        let c = ClientBuilder::default()
+            .into_client::<http_client::native::NativeClient, UserFeatures>(
+                "http://127.0.0.1:1234/",
+                "foo",
+                "test",
+                None,
+            )
+            .unwrap();
+
         c.memoize(f.features).unwrap();
         let present: Context = Context {
             user_id: Some("present".into()),
@@ -501,22 +624,72 @@ mod tests {
             user_id: Some("missing".into()),
             ..Default::default()
         };
-        // unknown features should honour the default
-        assert_eq!(false, c.is_enabled("unknown", None, false));
-        assert_eq!(true, c.is_enabled("unknown", None, true));
+        // features unknown on the server should honour the default
+        assert_eq!(false, c.is_enabled(UserFeatures::unknown, None, false));
+        assert_eq!(true, c.is_enabled(UserFeatures::unknown, None, true));
         // default should be enabled, no context needed
-        assert_eq!(true, c.is_enabled("default", None, false));
+        assert_eq!(true, c.is_enabled(UserFeatures::default, None, false));
         // user present should be present on userWithId
-        assert_eq!(true, c.is_enabled("userWithId", Some(&present), false));
+        assert_eq!(
+            true,
+            c.is_enabled(UserFeatures::userWithId, Some(&present), false)
+        );
         // user missing should not
-        assert_eq!(false, c.is_enabled("userWithId", Some(&missing), false));
+        assert_eq!(
+            false,
+            c.is_enabled(UserFeatures::userWithId, Some(&missing), false)
+        );
         // user missing should be present on userWithId+default
         assert_eq!(
             true,
-            c.is_enabled("userWithId+default", Some(&missing), false)
+            c.is_enabled(UserFeatures::userWithId_Default, Some(&missing), false)
         );
         // disabled should be disabled
-        assert_eq!(false, c.is_enabled("disabled", None, true));
+        assert_eq!(false, c.is_enabled(UserFeatures::disabled, None, true));
+    }
+
+    #[test]
+    fn test_memoization_strs() {
+        let _ = simple_logger::init();
+        let f = features();
+        // And with plain old strings
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum NoFeatures {}
+        let c = ClientBuilder::default()
+            .enable_string_features()
+            .into_client::<http_client::native::NativeClient, NoFeatures>(
+                "http://127.0.0.1:1234/",
+                "foo",
+                "test",
+                None,
+            )
+            .unwrap();
+
+        c.memoize(f.features).unwrap();
+        let present: Context = Context {
+            user_id: Some("present".into()),
+            ..Default::default()
+        };
+        let missing: Context = Context {
+            user_id: Some("missing".into()),
+            ..Default::default()
+        };
+        // features unknown on the server should honour the default
+        assert_eq!(false, c.is_enabled_str("unknown", None, false));
+        assert_eq!(true, c.is_enabled_str("unknown", None, true));
+        // default should be enabled, no context needed
+        assert_eq!(true, c.is_enabled_str("default", None, false));
+        // user present should be present on userWithId
+        assert_eq!(true, c.is_enabled_str("userWithId", Some(&present), false));
+        // user missing should not
+        assert_eq!(false, c.is_enabled_str("userWithId", Some(&missing), false));
+        // user missing should be present on userWithId+default
+        assert_eq!(
+            true,
+            c.is_enabled_str("userWithId+default", Some(&missing), false)
+        );
+        // disabled should be disabled
+        assert_eq!(false, c.is_enabled_str("disabled", None, true));
     }
 
     fn _reversed_uids<S: BuildHasher>(
@@ -541,9 +714,15 @@ mod tests {
     #[test]
     fn test_custom_strategy() {
         let _ = simple_logger::init();
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum UserFeatures {
+            default,
+            reversed,
+        }
         let client = ClientBuilder::default()
             .strategy("reversed", Box::new(&_reversed_uids))
-            .into_client::<http_client::native::NativeClient>(
+            .into_client::<http_client::native::NativeClient, UserFeatures>(
                 "http://127.0.0.1:1234/",
                 "foo",
                 "test",
@@ -588,11 +767,17 @@ mod tests {
             ..Default::default()
         };
         // user cba should be present on reversed
-        assert_eq!(true, client.is_enabled("reversed", Some(&present), false));
+        assert_eq!(
+            true,
+            client.is_enabled(UserFeatures::reversed, Some(&present), false)
+        );
         // user abc should not
-        assert_eq!(false, client.is_enabled("reversed", Some(&missing), false));
+        assert_eq!(
+            false,
+            client.is_enabled(UserFeatures::reversed, Some(&missing), false)
+        );
         // adding custom strategies shouldn't disable built-in ones
         // default should be enabled, no context needed
-        assert_eq!(true, client.is_enabled("default", None, false));
+        assert_eq!(true, client.is_enabled(UserFeatures::default, None, false));
     }
 }

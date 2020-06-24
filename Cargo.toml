@@ -15,10 +15,20 @@ version = "0.2.0"
 [badges.maintenance]
 status = "experimental"
 
+[[bench]]
+harness = false
+name = "is_enabled"
+
+[[bin]]
+bench = false
+name = "dump-features"
+path = "src/bin/dump-features.rs"
+
 [dependencies]
 anyhow = "1.0.28"
 arc-swap = "0.4.6"
 async-std = "1.5.0"
+enum-map = "0.6.2"
 futures = "0.3.4"
 futures-timer = "3.0.2"
 hostname = "0.3.1"
@@ -30,6 +40,7 @@ maplit = "1.0.2"
 murmur3 = "0.5.1"
 rand = "0.7.3"
 serde_json = "1.0.52"
+serde_plain = "0.3"
 surf = "2.0.0-alpha.4"
 
 [dependencies.chrono]
@@ -49,17 +60,8 @@ simple_logger = "1.6.0"
 features = ["rt-threaded", "macros"]
 version = "0.2.20"
 
-[[bench]]
-name = "is_enabled"
-harness = false
-
 [features]
 functional = []
 
 [lib]
-bench=false
-
-[[bin]]
-name="dump-features"
-path="src/bin/dump-features.rs"
-bench=false
+bench = false
