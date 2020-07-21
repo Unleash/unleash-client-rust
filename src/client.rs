@@ -89,7 +89,7 @@ impl Default for ClientBuilder {
 
 #[derive(Default)]
 pub struct CachedFeature {
-    strategies: Vec<strategy::Evaluate>,
+    pub strategies: Vec<strategy::Evaluate>,
     // unknown features are tracked for metrics (so the server can see that they
     // are being used). They require specific logic (see is_enabled).
     known: bool,
@@ -100,7 +100,7 @@ pub struct CachedFeature {
     disabled: AtomicU64,
 }
 
-struct CachedState<F>
+pub struct CachedState<F>
 where
     F: Enum<CachedFeature>,
 {
@@ -109,6 +109,16 @@ where
     // The default value of F is defined as 'fallback to string lookups'.
     features: EnumMap<F, CachedFeature>,
     str_features: HashMap<String, CachedFeature>,
+}
+
+impl<F> CachedState<F>
+where
+    F: Enum<CachedFeature>,
+{
+    /// Access the cached string features.
+    pub fn str_features(&self) -> &HashMap<String, CachedFeature> {
+        &self.str_features
+    }
 }
 
 pub struct Client<C, F>
@@ -134,6 +144,18 @@ where
     C: http_client::HttpClient + std::default::Default,
     F: Enum<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
 {
+    /// The cached state can be accessed. It may be uninitialised, and
+    /// represents a point in time snapshot: subsequent calls may have wound the
+    /// metrics back, entirely lost string features etc.
+    pub fn cached_state(&self) -> arc_swap::Guard<Option<Arc<CachedState<F>>>> {
+        let cache = self.cached_state.load();
+        if cache.is_none() {
+            // No API state loaded
+            trace!("is_enabled: No API state");
+        }
+        cache
+    }
+
     pub fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
         trace!(
             "is_enabled: feature {:?} default {}, context {:?}",
@@ -141,15 +163,11 @@ where
             default,
             context
         );
-        let cache = self.cached_state.load();
-        let cache = if let Some(cache) = &*cache {
-            cache
-        } else {
-            // No API state loaded
-            trace!("is_enabled: No API state");
-            return false;
+        let cache = self.cached_state();
+        let cache = match cache.as_ref() {
+            None => return false,
+            Some(cache) => cache,
         };
-
         let feature = &cache.features[feature_enum.clone()];
         let default_context: Context = Default::default();
         let context = context.unwrap_or(&default_context);
@@ -204,13 +222,10 @@ where
             self.enable_str_features,
             "String feature lookup not enabled"
         );
-        let cache = self.cached_state.load();
-        let cache = if let Some(cache) = &*cache {
-            cache
-        } else {
-            // No API state loaded
-            trace!("is_enabled: No API state");
-            return false;
+        let cache = self.cached_state();
+        let cache = match cache.as_ref() {
+            None => return false,
+            Some(cache) => cache,
         };
         if let Some(feature) = cache.str_features.get(feature_name) {
             let default_context: Context = Default::default();
