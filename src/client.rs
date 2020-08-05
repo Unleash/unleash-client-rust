@@ -141,7 +141,8 @@ where
     instance_id: String,
     interval: u64,
     polling: AtomicBool,
-    http: HTTP<C>,
+    // Permits making extension calls to the Unleash API not yet modelled in the Rust SDK.
+    pub http: HTTP<C>,
     // known strategies: strategy_name : memoiser
     strategies: Mutex<HashMap<String, strategy::Strategy>>,
     // memoised state: feature_name: [callback, callback, ...]
