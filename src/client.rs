@@ -21,6 +21,7 @@ use crate::http::HTTP;
 use crate::strategy;
 
 pub struct ClientBuilder {
+    disable_metric_submission: bool,
     enable_str_features: bool,
     interval: u64,
     strategies: HashMap<String, strategy::Strategy>,
@@ -41,6 +42,7 @@ impl ClientBuilder {
         Ok(Client {
             api_url: api_url.into(),
             app_name: app_name.into(),
+            disable_metric_submission: self.disable_metric_submission,
             enable_str_features: self.enable_str_features,
             instance_id: instance_id.into(),
             interval: self.interval,
@@ -49,6 +51,11 @@ impl ClientBuilder {
             cached_state: ArcSwapOption::from(None),
             strategies: Mutex::new(self.strategies),
         })
+    }
+
+    pub fn disable_metric_submission(mut self) -> Self {
+        self.disable_metric_submission = true;
+        self
     }
 
     pub fn enable_string_features(mut self) -> Self {
@@ -70,6 +77,7 @@ impl ClientBuilder {
 impl Default for ClientBuilder {
     fn default() -> ClientBuilder {
         let result = ClientBuilder {
+            disable_metric_submission: false,
             enable_str_features: false,
             interval: 15000,
             strategies: Default::default(),
@@ -128,6 +136,7 @@ where
 {
     api_url: String,
     app_name: String,
+    disable_metric_submission: bool,
     enable_str_features: bool,
     instance_id: String,
     interval: u64,
@@ -456,19 +465,21 @@ where
                 match self.memoize(features.features) {
                     Ok(None) => {}
                     Ok(Some(metrics)) => {
-                        let mut metrics_uploaded = false;
-                        let req = self.http.post(&metrics_endpoint).body_json(&metrics);
-                        if let Ok(req) = req {
-                            let res = req.await;
-                            if let Ok(res) = res {
-                                if res.status().is_success() {
-                                    metrics_uploaded = true;
-                                    debug!("poll: uploaded feature metrics")
+                        if !self.disable_metric_submission {
+                            let mut metrics_uploaded = false;
+                            let req = self.http.post(&metrics_endpoint).body_json(&metrics);
+                            if let Ok(req) = req {
+                                let res = req.await;
+                                if let Ok(res) = res {
+                                    if res.status().is_success() {
+                                        metrics_uploaded = true;
+                                        debug!("poll: uploaded feature metrics")
+                                    }
                                 }
                             }
-                        }
-                        if !metrics_uploaded {
-                            warn!("poll: error uploading feature metrics");
+                            if !metrics_uploaded {
+                                warn!("poll: error uploading feature metrics");
+                            }
                         }
                     }
                     Err(_) => {
@@ -478,7 +489,9 @@ where
             } else {
                 warn!("poll: failed to retrieve features");
             }
-            Delay::new(Duration::from_millis(self.interval)).await;
+            let duration = Duration::from_millis(self.interval);
+            debug!("poll: waiting {:?}", duration);
+            Delay::new(duration).await;
             if !self.polling.load(Ordering::Relaxed) {
                 return;
             }
