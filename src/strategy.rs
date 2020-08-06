@@ -60,11 +60,15 @@ pub fn user_with_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S
     })
 }
 
-// get the group and rollout parameters for session and user rollouts
-// When no group is supplied, rollout is clamped to zero and
-// group is set to "".
-fn _group_and_rollout<S: BuildHasher>(
-    parameters: Option<HashMap<String, String, S>>,
+/// Get the group and rollout parameters for gradual rollouts.
+///
+/// When no group is supplied, group is set to "".
+///
+/// Checks the following parameter keys:
+/// `groupId`: defines the hash group, used to either correlate or prevent correlation across toggles.
+/// rollout_key: supplied by the caller, this keys value is the percent of the hashed results to enable.
+pub fn group_and_rollout<S: BuildHasher>(
+    parameters: &Option<HashMap<String, String, S>>,
     rollout_key: &str,
 ) -> (String, u32) {
     let parameters = if let Some(parameters) = parameters {
@@ -73,9 +77,9 @@ fn _group_and_rollout<S: BuildHasher>(
         return ("".into(), 0);
     };
     let group = if let Some(group) = parameters.get("groupId") {
-        group
+        group.to_string()
     } else {
-        return ("".into(), 0);
+        "".into()
     };
 
     let mut rollout = 0;
@@ -84,17 +88,19 @@ fn _group_and_rollout<S: BuildHasher>(
             rollout = percent
         }
     }
-    (group.to_string(), rollout)
+    (group, rollout)
 }
 
-// Implement partial rollout given a group a variable part and a rollout amount
-fn _partial_rollout(group: &str, variable: Option<&String>, rollout: u32) -> bool {
+/// Implement partial rollout given a group a variable part and a rollout amount
+pub fn partial_rollout(group: &str, variable: Option<&String>, rollout: u32) -> bool {
     let variable = if let Some(variable) = variable {
         variable
     } else {
         return false;
     };
-    let mut reader = Cursor::new(&group).chain(Cursor::new(&variable));
+    let mut reader = Cursor::new(&group)
+        .chain(Cursor::new(":"))
+        .chain(Cursor::new(&variable));
     if let Ok(hash_result) = murmur3_32(&mut reader, 0) {
         let normalised = hash_result % 100;
         rollout > normalised
@@ -109,9 +115,9 @@ fn _session_id<S: BuildHasher>(
     parameters: Option<HashMap<String, String, S>>,
     rollout_key: &str,
 ) -> Evaluate {
-    let (group, rollout) = _group_and_rollout(parameters, rollout_key);
+    let (group, rollout) = group_and_rollout(&parameters, rollout_key);
     Box::new(move |context: &Context| -> bool {
-        _partial_rollout(&group, context.session_id.as_ref(), rollout)
+        partial_rollout(&group, context.session_id.as_ref(), rollout)
     })
 }
 
@@ -121,9 +127,9 @@ fn _user_id<S: BuildHasher>(
     parameters: Option<HashMap<String, String, S>>,
     rollout_key: &str,
 ) -> Evaluate {
-    let (group, rollout) = _group_and_rollout(parameters, rollout_key);
+    let (group, rollout) = group_and_rollout(&parameters, rollout_key);
     Box::new(move |context: &Context| -> bool {
-        _partial_rollout(&group, context.user_id.as_ref(), rollout)
+        partial_rollout(&group, context.user_id.as_ref(), rollout)
     })
 }
 
@@ -146,12 +152,12 @@ pub fn flexible_rollout<S: BuildHasher>(
     } {
         "DEFAULT" => {
             // user, session, random in that order.
-            let (group, rollout) = _group_and_rollout(parameters, "rollout");
+            let (group, rollout) = group_and_rollout(&parameters, "rollout");
             Box::new(move |context: &Context| -> bool {
                 if context.user_id.is_some() {
-                    _partial_rollout(&group, context.user_id.as_ref(), rollout)
+                    partial_rollout(&group, context.user_id.as_ref(), rollout)
                 } else if context.session_id.is_some() {
-                    _partial_rollout(&group, context.session_id.as_ref(), rollout)
+                    partial_rollout(&group, context.session_id.as_ref(), rollout)
                 } else {
                     let picked = rand::thread_rng().gen_range(0, 100);
                     rollout > picked
@@ -351,7 +357,7 @@ mod tests {
         // Check groupId modifies the hash order
         let params: HashMap<String, String> = hashmap! {
             "stickiness".into() => "SESSIONID".into(),
-            "groupId".into() => "group2".into(),
+            "groupId".into() => "group3".into(),
             "rollout".into() => "50".into(),
         };
         let c: Context = Context {
@@ -405,7 +411,7 @@ mod tests {
         // Check groupId modifies the hash order
         let params: HashMap<String, String> = hashmap! {
             "stickiness".into() => "USERID".into(),
-            "groupId".into() => "group3".into(),
+            "groupId".into() => "group2".into(),
             "rollout".into() => "50".into(),
         };
         let c: Context = Context {
