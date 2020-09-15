@@ -47,7 +47,7 @@ pub fn user_with_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S
     if let Some(parameters) = parameters {
         if let Some(uids_list) = parameters.get("userIds") {
             for uid in uids_list.split(',') {
-                uids.insert(uid.into());
+                uids.insert(uid.trim().into());
             }
         }
     }
@@ -221,7 +221,7 @@ pub fn remote_address<S: BuildHasher>(parameters: Option<HashMap<String, String,
     if let Some(parameters) = parameters {
         if let Some(ips_str) = parameters.get("IPS") {
             for ip_str in ips_str.split(',') {
-                let ip_parsed = ipaddress::IPAddress::parse(ip_str);
+                let ip_parsed = ipaddress::IPAddress::parse(ip_str.trim());
                 if let Ok(ip) = ip_parsed {
                     ips.push(ip)
                 }
@@ -249,7 +249,7 @@ pub fn hostname<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) 
         parameters.map(|parameters| {
             parameters.get("hostNames").map(|hostnames: &String| {
                 for hostname in hostnames.split(',') {
-                    if this_hostname == hostname {
+                    if this_hostname == hostname.trim() {
                         result = true;
                     }
                 }
