@@ -622,7 +622,11 @@ mod tests {
 
     #[test]
     fn test_memoization_enum() {
-        let _ = simple_logger::init();
+        let _ = simple_logger::SimpleLogger::new()
+            .with_module_level("isahc::agent", log::LevelFilter::Off)
+            .with_module_level("tracing::span", log::LevelFilter::Off)
+            .with_module_level("tracing::span::active", log::LevelFilter::Off)
+            .init();
         let f = features();
         // with an enum
         #[allow(non_camel_case_types)]
@@ -679,7 +683,11 @@ mod tests {
 
     #[test]
     fn test_memoization_strs() {
-        let _ = simple_logger::init();
+        let _ = simple_logger::SimpleLogger::new()
+            .with_module_level("isahc::agent", log::LevelFilter::Off)
+            .with_module_level("tracing::span", log::LevelFilter::Off)
+            .with_module_level("tracing::span::active", log::LevelFilter::Off)
+            .init();
         let f = features();
         // And with plain old strings
         #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
@@ -742,7 +750,11 @@ mod tests {
     }
     #[test]
     fn test_custom_strategy() {
-        let _ = simple_logger::init();
+        let _ = simple_logger::SimpleLogger::new()
+            .with_module_level("isahc::agent", log::LevelFilter::Off)
+            .with_module_level("tracing::span", log::LevelFilter::Off)
+            .with_module_level("tracing::span::active", log::LevelFilter::Off)
+            .init();
         #[allow(non_camel_case_types)]
         #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
         enum UserFeatures {

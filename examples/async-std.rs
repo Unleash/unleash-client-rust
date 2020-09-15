@@ -22,7 +22,7 @@ enum UserFeatures {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let _ = simple_logger::init();
+    let _ = simple_logger::SimpleLogger::new().init();
     task::block_on(async {
         let config = EnvironmentConfig::from_env()?;
         let client = client::ClientBuilder::default()
