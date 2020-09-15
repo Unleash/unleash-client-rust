@@ -204,7 +204,12 @@ fn client(count: usize) -> client::Client<http_client::native::NativeClient, Use
 }
 
 fn batch(c: &mut Criterion) {
-    let _ = simple_logger::init_with_level(log::Level::Warn);
+    let _ = simple_logger::SimpleLogger::new()
+        .with_module_level("isahc::agent", log::LevelFilter::Off)
+        .with_module_level("tracing::span", log::LevelFilter::Off)
+        .with_module_level("tracing::span::active", log::LevelFilter::Off)
+        .with_level(log::LevelFilter::Warn)
+        .init();
     let cpus = num_cpus::get();
     let client = Arc::new(client(cpus));
     let iterations = 50_000;
@@ -383,7 +388,12 @@ fn batch(c: &mut Criterion) {
 }
 
 fn single_call(c: &mut Criterion) {
-    let _ = simple_logger::init_with_level(log::Level::Warn);
+    let _ = simple_logger::SimpleLogger::new()
+        .with_module_level("isahc::agent", log::LevelFilter::Off)
+        .with_module_level("tracing::span", log::LevelFilter::Off)
+        .with_module_level("tracing::span::active", log::LevelFilter::Off)
+        .with_level(log::LevelFilter::Warn)
+        .init();
     let client = client(1);
     let context = Context {
         user_id: Some(thread_rng().sample_iter(&Alphanumeric).take(30).collect()),

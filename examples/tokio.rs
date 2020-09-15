@@ -22,7 +22,7 @@ enum UserFeatures {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let _ = simple_logger::init();
+    let _ = simple_logger::SimpleLogger::new().init();
     let config = EnvironmentConfig::from_env()?;
     let client = client::ClientBuilder::default()
         .interval(500)
