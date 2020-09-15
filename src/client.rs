@@ -101,6 +101,9 @@ pub struct CachedFeature {
     // unknown features are tracked for metrics (so the server can see that they
     // are being used). They require specific logic (see is_enabled).
     known: bool,
+    // disabled features behaviour differently to empty strategies, so we carry
+    // this field across.
+    feature_disabled: bool,
     // Tracks metrics during a refresh interval. If the AtomicBool updates show
     // to be a contention point then thread-sharded counters with a gather phase
     // on submission will be the next logical progression.
@@ -181,6 +184,14 @@ where
         let feature = &cache.features[feature_enum.clone()];
         let default_context: Context = Default::default();
         let context = context.unwrap_or(&default_context);
+        if feature.strategies.is_empty() && feature.known && !feature.feature_disabled {
+            trace!(
+                "is_enabled: feature {:?} has no strategies: enabling",
+                feature_enum
+            );
+            feature.enabled.fetch_add(1, Ordering::Relaxed);
+            return true;
+        }
         for memo in feature.strategies.iter() {
             if memo(context) {
                 debug!(
@@ -240,6 +251,14 @@ where
         if let Some(feature) = cache.str_features.get(feature_name) {
             let default_context: Context = Default::default();
             let context = context.unwrap_or(&default_context);
+            if feature.strategies.is_empty() && feature.known && !feature.feature_disabled {
+                trace!(
+                    "is_enabled: feature {} has no strategies: enabling",
+                    feature_name
+                );
+                feature.enabled.fetch_add(1, Ordering::Relaxed);
+                return true;
+            }
             for memo in feature.strategies.iter() {
                 if memo(context) {
                     debug!(
@@ -314,6 +333,7 @@ where
                                         feature.enabled.load(Ordering::Relaxed),
                                     ),
                                     known: feature.known,
+                                    feature_disabled: feature.feature_disabled,
                                     strategies: feature.strategies.clone(),
                                 }
                             };
@@ -329,6 +349,7 @@ where
                                 disabled: AtomicU64::new(if default { 0 } else { 1 }),
                                 enabled: AtomicU64::new(if default { 1 } else { 0 }),
                                 known: false,
+                                feature_disabled: false,
                                 strategies: vec![],
                             };
                             new_state
@@ -370,6 +391,7 @@ where
                         disabled: AtomicU64::new(0),
                         enabled: AtomicU64::new(0),
                         known: true,
+                        feature_disabled: true,
                     }
                 } else {
                     // TODO add variant support
@@ -386,6 +408,7 @@ where
                         disabled: AtomicU64::new(0),
                         enabled: AtomicU64::new(0),
                         known: true,
+                        feature_disabled: false,
                     }
                 }
             };
@@ -616,6 +639,14 @@ mod tests {
                         parameters: None,
                     }],
                 },
+                Feature {
+                    description: "nostrategies".into(),
+                    enabled: true,
+                    created_at: None,
+                    variants: None,
+                    name: "nostrategies".into(),
+                    strategies: vec![],
+                },
             ],
         }
     }
@@ -638,6 +669,7 @@ mod tests {
             #[serde(rename = "userWithId+default")]
             userWithId_Default,
             disabled,
+            nostrategies,
         }
         let c = ClientBuilder::default()
             .into_client::<http_client::native::NativeClient, UserFeatures>(
@@ -679,6 +711,8 @@ mod tests {
         );
         // disabled should be disabled
         assert_eq!(false, c.is_enabled(UserFeatures::disabled, None, true));
+        // no strategies should result in enabled features.
+        assert_eq!(true, c.is_enabled(UserFeatures::nostrategies, None, false));
     }
 
     #[test]
@@ -727,6 +761,8 @@ mod tests {
         );
         // disabled should be disabled
         assert_eq!(false, c.is_enabled_str("disabled", None, true));
+        // no strategies should result in enabled features.
+        assert_eq!(true, c.is_enabled_str("nostrategies", None, false));
     }
 
     fn _reversed_uids<S: BuildHasher>(
