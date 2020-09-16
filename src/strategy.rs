@@ -4,7 +4,6 @@ use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
 use std::hash::BuildHasher;
 use std::io::Cursor;
-use std::io::Read;
 
 use murmur3::murmur3_32;
 use rand::Rng;
@@ -98,15 +97,24 @@ pub fn partial_rollout(group: &str, variable: Option<&String>, rollout: u32) -> 
     } else {
         return false;
     };
-    let mut reader = Cursor::new(&group)
-        .chain(Cursor::new(":"))
-        .chain(Cursor::new(&variable));
+    // See https://github.com/stusmall/murmur3/pull/16 : .chain may avoid
+    // copying in the general case, and may be faster (though perhaps
+    // benchmarking would be useful - small datasizes here could make the best
+    // path non-obvious) - but until murmur3 is fixed, we need to provide it
+    // with a single string no matter what.
+    let mut reader = Cursor::new(format!("{}:{}", &group, &variable));
     if let Ok(hash_result) = murmur3_32(&mut reader, 0) {
         let normalised = hash_result % 100;
         rollout > normalised
     } else {
         false
     }
+}
+
+#[test]
+fn normalised_hash() {
+    let uid = "122".to_string();
+    assert_eq!(true, partial_rollout("AB12A", Some(&uid), 50));
 }
 
 // Build a closure to handle session id rollouts, parameterised by groupId and a
@@ -350,7 +358,7 @@ mod tests {
         };
         assert_eq!(true, super::flexible_rollout(Some(params.clone()))(&c));
         let c: Context = Context {
-            session_id: Some("session3".into()),
+            session_id: Some("session2".into()),
             ..Default::default()
         };
         assert_eq!(false, super::flexible_rollout(Some(params))(&c));
@@ -366,7 +374,7 @@ mod tests {
         };
         assert_eq!(false, super::flexible_rollout(Some(params.clone()))(&c));
         let c: Context = Context {
-            session_id: Some("session3".into()),
+            session_id: Some("session2".into()),
             ..Default::default()
         };
         assert_eq!(true, super::flexible_rollout(Some(params))(&c));
@@ -415,12 +423,12 @@ mod tests {
             "rollout".into() => "50".into(),
         };
         let c: Context = Context {
-            user_id: Some("user1".into()),
+            user_id: Some("user3".into()),
             ..Default::default()
         };
         assert_eq!(false, super::flexible_rollout(Some(params.clone()))(&c));
         let c: Context = Context {
-            user_id: Some("user3".into()),
+            user_id: Some("user1".into()),
             ..Default::default()
         };
         assert_eq!(true, super::flexible_rollout(Some(params))(&c));
