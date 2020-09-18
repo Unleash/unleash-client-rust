@@ -221,13 +221,13 @@ pub fn random<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) ->
 }
 
 /// https://unleash.github.io/docs/activation_strategy#remoteaddress
-/// IPS: 1.2.3.4,AB::CD::::EF,1.2/8
+/// IPs: 1.2.3.4,AB::CD::::EF,1.2/8
 pub fn remote_address<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     // TODO: this could be optimised given the inherent radix structure, but its
     // not exactly hot-path.
     let mut ips: Vec<ipaddress::IPAddress> = Vec::new();
     if let Some(parameters) = parameters {
-        if let Some(ips_str) = parameters.get("IPS") {
+        if let Some(ips_str) = parameters.get("IPs") {
             for ip_str in ips_str.split(',') {
                 let ip_parsed = ipaddress::IPAddress::parse(ip_str.trim());
                 if let Ok(ip) = ip_parsed {
@@ -451,7 +451,7 @@ mod tests {
     #[test]
     fn test_remote_address() {
         let params: HashMap<String, String> = hashmap! {
-            "IPS".into() => "1.2/8,2.3.4.5,2222:FF:0:1234::/64".into()
+            "IPs".into() => "1.2/8,2.3.4.5,2222:FF:0:1234::/64".into()
         };
         let c: Context = Context {
             remote_address: Some(IPAddress::parse("1.2.3.4").unwrap()),
