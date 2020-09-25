@@ -97,24 +97,24 @@ pub fn partial_rollout(group: &str, variable: Option<&String>, rollout: u32) -> 
     } else {
         return false;
     };
-    // See https://github.com/stusmall/murmur3/pull/16 : .chain may avoid
-    // copying in the general case, and may be faster (though perhaps
-    // benchmarking would be useful - small datasizes here could make the best
-    // path non-obvious) - but until murmur3 is fixed, we need to provide it
-    // with a single string no matter what.
-    let mut reader = Cursor::new(format!("{}:{}", &group, &variable));
-    if let Ok(hash_result) = murmur3_32(&mut reader, 0) {
-        let normalised = hash_result % 100;
+    if let Ok(normalised) = normalised_hash(group, &variable, 100) {
         rollout > normalised
     } else {
         false
     }
 }
 
-#[test]
-fn normalised_hash() {
-    let uid = "122".to_string();
-    assert_eq!(true, partial_rollout("AB12A", Some(&uid), 50));
+/// Calculates a hash in the standard way expected for Unleash clients. Not
+/// required for extension strategies, but reusing this is probably a good idea
+/// for consistency across implementations.
+pub fn normalised_hash(group: &str, identifier: &str, modulus: u32) -> std::io::Result<u32> {
+    // See https://github.com/stusmall/murmur3/pull/16 : .chain may avoid
+    // copying in the general case, and may be faster (though perhaps
+    // benchmarking would be useful - small datasizes here could make the best
+    // path non-obvious) - but until murmur3 is fixed, we need to provide it
+    // with a single string no matter what.
+    let mut reader = Cursor::new(format!("{}:{}", &group, &identifier));
+    murmur3_32(&mut reader, 0).map(|hash_result| hash_result % modulus)
 }
 
 // Build a closure to handle session id rollouts, parameterised by groupId and a
@@ -487,5 +487,10 @@ mod tests {
             "hostNames".into() => "foo,bar".into()
         };
         assert_eq!(false, super::hostname(Some(params))(&c));
+    }
+
+    #[test]
+    fn normalised_hash() {
+        assert!(50 > super::normalised_hash("AB12A", "122", 100).unwrap());
     }
 }
