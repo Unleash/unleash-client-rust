@@ -27,7 +27,6 @@ Core Unleash API features work, with Rust 1.43 or above.
 Missing Unleash specified features:
 
 - local serialised copy of toggles to survive restarts without network traffic.
-- variant support.
 
 ## Code of conduct
 

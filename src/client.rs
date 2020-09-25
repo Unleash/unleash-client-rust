@@ -2,7 +2,7 @@
 //! The primary interface for users of the library.
 use std::collections::hash_map::HashMap;
 use std::default::Default;
-use std::fmt::Debug;
+use std::fmt::{self, Debug, Display};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -12,13 +12,46 @@ use chrono::Utc;
 use enum_map::{Enum, EnumMap};
 use futures_timer::Delay;
 use log::{debug, trace, warn};
+use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::api::{Feature, Features, Metrics, MetricsBucket, Registration};
+use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration};
 use crate::context::Context;
 use crate::http::HTTP;
 use crate::strategy;
+
+// ----------------- Variant
+
+/// Variant is returned from `Client.get_variant` and is a cut down and
+/// ergonomic version of `api.get_variant`
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Variant {
+    pub name: String,
+    pub payload: HashMap<String, String>,
+    pub enabled: bool,
+}
+
+impl From<&api::Variant> for Variant {
+    fn from(variant: &api::Variant) -> Self {
+        Self {
+            name: variant.name.clone(),
+            payload: variant.payload.as_ref().cloned().unwrap_or_default(),
+            enabled: true,
+        }
+    }
+}
+
+impl Variant {
+    fn disabled() -> Self {
+        Self {
+            name: "disabled".into(),
+            ..Default::default()
+        }
+    }
+}
+
+// ----------------- ClientBuilder
 
 pub struct ClientBuilder {
     disable_metric_submission: bool,
@@ -109,6 +142,8 @@ pub struct CachedFeature {
     // on submission will be the next logical progression.
     enabled: AtomicU64,
     disabled: AtomicU64,
+    // Variants for use with get_variant
+    variants: Vec<api::Variant>,
 }
 
 pub struct CachedState<F>
@@ -152,36 +187,32 @@ where
     cached_state: ArcSwapOption<CachedState<F>>,
 }
 
-impl<C, F> Client<C, F>
+trait Enabled<F>
 where
-    C: http_client::HttpClient + std::default::Default,
+    F: Enum<CachedFeature>,
+{
+    fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool;
+    fn is_enabled_str(
+        &self,
+        feature_name: &str,
+        context: Option<&Context>,
+        default: bool,
+        cached_features: &ArcSwapOption<CachedState<F>>,
+    ) -> bool;
+}
+
+impl<'a, F> Enabled<F> for &Arc<CachedState<F>>
+where
     F: Enum<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
 {
-    /// The cached state can be accessed. It may be uninitialised, and
-    /// represents a point in time snapshot: subsequent calls may have wound the
-    /// metrics back, entirely lost string features etc.
-    pub fn cached_state(&self) -> arc_swap::Guard<Option<Arc<CachedState<F>>>> {
-        let cache = self.cached_state.load();
-        if cache.is_none() {
-            // No API state loaded
-            trace!("is_enabled: No API state");
-        }
-        cache
-    }
-
-    pub fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
+    fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
         trace!(
             "is_enabled: feature {:?} default {}, context {:?}",
             feature_enum,
             default,
             context
         );
-        let cache = self.cached_state();
-        let cache = match cache.as_ref() {
-            None => return false,
-            Some(cache) => cache,
-        };
-        let feature = &cache.features[feature_enum.clone()];
+        let feature = &self.features[feature_enum.clone()];
         let default_context: Context = Default::default();
         let context = context.unwrap_or(&default_context);
         if feature.strategies.is_empty() && feature.known && !feature.feature_disabled {
@@ -223,32 +254,24 @@ where
             }
             default
         } else {
+            // known, non-empty, missed all strategies: disabled
+            trace!(
+                "is_enabled: feature {:?} failed all strategies, disabling",
+                feature_enum
+            );
+            feature.disabled.fetch_add(1, Ordering::Relaxed);
             false
         }
     }
 
-    pub fn is_enabled_str(
+    fn is_enabled_str(
         &self,
         feature_name: &str,
         context: Option<&Context>,
         default: bool,
+        cached_features: &ArcSwapOption<CachedState<F>>,
     ) -> bool {
-        trace!(
-            "is_enabled: feature_str {:?} default {}, context {:?}",
-            feature_name,
-            default,
-            context
-        );
-        assert!(
-            self.enable_str_features,
-            "String feature lookup not enabled"
-        );
-        let cache = self.cached_state();
-        let cache = match cache.as_ref() {
-            None => return false,
-            Some(cache) => cache,
-        };
-        if let Some(feature) = cache.str_features.get(feature_name) {
+        if let Some(feature) = &self.str_features.get(feature_name) {
             let default_context: Context = Default::default();
             let context = context.unwrap_or(&default_context);
             if feature.strategies.is_empty() && feature.known && !feature.feature_disabled {
@@ -299,70 +322,248 @@ where
                 default
             );
             // Insert a compiled feature to track metrics.
-            self.cached_state
-                .rcu(|cached_state: &Option<Arc<CachedState<F>>>| {
-                    // Did someone swap None in ?
-                    if let Some(cached_state) = cached_state {
-                        let cached_state = cached_state.clone();
-                        if let Some(feature) = cached_state.str_features.get(feature_name) {
-                            // raced with *either* a poll_for_updates() that
-                            // added the feature in the API server or another
-                            // thread adding this same metric memoisation;
-                            // record against metrics here, but still return
-                            // default as consistent enough.
-                            if default {
-                                feature.enabled.fetch_add(1, Ordering::Relaxed);
-                            } else {
-                                feature.disabled.fetch_add(1, Ordering::Relaxed);
-                            }
-                            Some(cached_state)
+            cached_features.rcu(|cached_state: &Option<Arc<CachedState<F>>>| {
+                // Did someone swap None in ?
+                if let Some(cached_state) = cached_state {
+                    let cached_state = cached_state.clone();
+                    if let Some(feature) = cached_state.str_features.get(feature_name) {
+                        // raced with *either* a poll_for_updates() that
+                        // added the feature in the API server or another
+                        // thread adding this same metric memoisation;
+                        // record against metrics here, but still return
+                        // default as consistent enough.
+                        if default {
+                            feature.enabled.fetch_add(1, Ordering::Relaxed);
                         } else {
-                            // still not present; add it
-                            // Build up a new cached state
-                            let mut new_state = CachedState {
-                                start: cached_state.start,
-                                features: EnumMap::new(),
-                                str_features: HashMap::new(),
-                            };
-                            fn cloned_feature(feature: &CachedFeature) -> CachedFeature {
-                                CachedFeature {
-                                    disabled: AtomicU64::new(
-                                        feature.disabled.load(Ordering::Relaxed),
-                                    ),
-                                    enabled: AtomicU64::new(
-                                        feature.enabled.load(Ordering::Relaxed),
-                                    ),
-                                    known: feature.known,
-                                    feature_disabled: feature.feature_disabled,
-                                    strategies: feature.strategies.clone(),
-                                }
-                            };
-                            for (key, feature) in &cached_state.features {
-                                new_state.features[key] = cloned_feature(&feature);
+                            feature.disabled.fetch_add(1, Ordering::Relaxed);
+                        }
+                        Some(cached_state)
+                    } else {
+                        // still not present; add it
+                        // Build up a new cached state
+                        let mut new_state = CachedState {
+                            start: cached_state.start,
+                            features: EnumMap::new(),
+                            str_features: HashMap::new(),
+                        };
+                        fn cloned_feature(feature: &CachedFeature) -> CachedFeature {
+                            CachedFeature {
+                                disabled: AtomicU64::new(feature.disabled.load(Ordering::Relaxed)),
+                                enabled: AtomicU64::new(feature.enabled.load(Ordering::Relaxed)),
+                                known: feature.known,
+                                feature_disabled: feature.feature_disabled,
+                                strategies: feature.strategies.clone(),
+                                variants: feature.variants.clone(),
                             }
-                            for (name, feature) in &cached_state.str_features {
-                                new_state
-                                    .str_features
-                                    .insert(name.clone(), cloned_feature(&feature));
-                            }
-                            let stub_feature = CachedFeature {
-                                disabled: AtomicU64::new(if default { 0 } else { 1 }),
-                                enabled: AtomicU64::new(if default { 1 } else { 0 }),
-                                known: false,
-                                feature_disabled: false,
-                                strategies: vec![],
-                            };
+                        };
+                        for (key, feature) in &cached_state.features {
+                            new_state.features[key] = cloned_feature(&feature);
+                        }
+                        for (name, feature) in &cached_state.str_features {
                             new_state
                                 .str_features
-                                .insert(feature_name.into(), stub_feature);
-                            Some(Arc::new(new_state))
+                                .insert(name.clone(), cloned_feature(&feature));
                         }
-                    } else {
-                        None
+                        let stub_feature = CachedFeature {
+                            disabled: AtomicU64::new(if default { 0 } else { 1 }),
+                            enabled: AtomicU64::new(if default { 1 } else { 0 }),
+                            known: false,
+                            feature_disabled: false,
+                            strategies: vec![],
+                            variants: vec![],
+                        };
+                        new_state
+                            .str_features
+                            .insert(feature_name.into(), stub_feature);
+                        Some(Arc::new(new_state))
                     }
-                });
+                } else {
+                    None
+                }
+            });
             default
         }
+    }
+}
+
+impl<C, F> Client<C, F>
+where
+    C: http_client::HttpClient + std::default::Default,
+    F: Enum<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
+{
+    /// The cached state can be accessed. It may be uninitialised, and
+    /// represents a point in time snapshot: subsequent calls may have wound the
+    /// metrics back, entirely lost string features etc.
+    pub fn cached_state(&self) -> arc_swap::Guard<Option<Arc<CachedState<F>>>> {
+        let cache = self.cached_state.load();
+        if cache.is_none() {
+            // No API state loaded
+            trace!("is_enabled: No API state");
+        }
+        cache
+    }
+
+    /// Determine what variant (if any) of the feature the given context is
+    /// selected for. This is a consistent selection within a feature only
+    /// - across different features with identical variant definitions,
+    ///   different variant selection will take place.
+    ///
+    /// The key used to hash is the first of the username, sessionid, the host
+    /// address, or a random string per call to get_variant.
+    pub fn get_variant(&self, feature_enum: F, context: &Context) -> Variant {
+        trace!(
+            "get_variant: feature {:?} context {:?}",
+            feature_enum,
+            context
+        );
+        let cache = self.cached_state();
+        let cache = match cache.as_ref() {
+            None => {
+                trace!("get_variant: feature {:?} no cached state", feature_enum);
+                return Variant::disabled();
+            }
+            Some(cache) => cache,
+        };
+        let enabled = cache.is_enabled(feature_enum.clone(), Some(context), false);
+        if !enabled {
+            return Variant::disabled();
+        }
+        let feature = &cache.features[feature_enum.clone()];
+        let str_f = EnumToString(&feature_enum);
+        self._get_variant(feature, &str_f, context)
+    }
+
+    /// Determine what variant (if any) of the feature the given context is
+    /// selected for. This is a consistent selection within a feature only
+    /// - across different features with identical variant definitions,
+    ///   different variant selection will take place.
+    ///
+    /// The key used to hash is the first of the username, sessionid, the host
+    /// address, or a random string per call to get_variant.
+    pub fn get_variant_str(&self, feature_name: &str, context: &Context) -> Variant {
+        trace!(
+            "get_variant_Str: feature {} context {:?}",
+            feature_name,
+            context
+        );
+        assert!(
+            self.enable_str_features,
+            "String feature lookup not enabled"
+        );
+        let cache = self.cached_state();
+        let cache = match cache.as_ref() {
+            None => {
+                trace!("get_variant_str: feature {} no cached state", feature_name);
+                return Variant::disabled();
+            }
+            Some(cache) => cache,
+        };
+        let enabled = cache.is_enabled_str(feature_name, Some(context), false, &self.cached_state);
+        if !enabled {
+            return Variant::disabled();
+        }
+        let feature = &cache.str_features.get(feature_name);
+        match feature {
+            None => {
+                trace!(
+                    "get_variant_str: feature {} enabled but not in cache",
+                    feature_name
+                );
+                Variant::disabled()
+            }
+            Some(feature) => self._get_variant(feature, &feature_name, context),
+        }
+    }
+
+    fn _get_variant<N: Debug + Display>(
+        &self,
+        feature: &CachedFeature,
+        feature_name: N,
+        context: &Context,
+    ) -> Variant {
+        if feature.variants.is_empty() {
+            trace!("get_variant: feature {:?} no variants", feature_name);
+            return Variant::disabled();
+        }
+        let group = format!("{}", feature_name);
+        let mut remote_address: Option<String> = None;
+        let identifier = context
+            .user_id
+            .as_ref()
+            .or_else(|| context.session_id.as_ref())
+            .or_else(|| {
+                context.remote_address.as_ref().and_then({
+                    |addr| {
+                        remote_address = Some(format!("{:?}", addr));
+                        remote_address.as_ref()
+                    }
+                })
+            });
+        if identifier.is_none() {
+            trace!(
+                "get_variant: feature {:?} context has no identifiers, selecting randomly",
+                feature_name
+            );
+            let mut rng = rand::thread_rng();
+            let picked = rng.gen_range(0, feature.variants.len());
+            return (&feature.variants[picked]).into();
+        }
+        let identifier = identifier.unwrap();
+        let total_weight = feature.variants.iter().map(|v| v.weight as u32).sum();
+        strategy::normalised_hash(&group, &identifier, total_weight)
+            .map(|selected_weight| {
+                let mut counter: u32 = 0;
+                for variant in feature.variants.iter().as_ref() {
+                    counter += variant.weight as u32;
+                    if counter > selected_weight {
+                        return variant.into();
+                    }
+                }
+                Variant::disabled()
+            })
+            .unwrap_or_else(|_| Variant::disabled())
+    }
+
+    pub fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
+        trace!(
+            "is_enabled: feature {:?} default {}, context {:?}",
+            feature_enum,
+            default,
+            context
+        );
+        let cache = self.cached_state();
+        let cache = match cache.as_ref() {
+            None => {
+                trace!("is_enabled: feature {:?} no cached state", feature_enum);
+                return false;
+            }
+            Some(cache) => cache,
+        };
+        cache.is_enabled(feature_enum, context, default)
+    }
+
+    pub fn is_enabled_str(
+        &self,
+        feature_name: &str,
+        context: Option<&Context>,
+        default: bool,
+    ) -> bool {
+        trace!(
+            "is_enabled: feature_str {:?} default {}, context {:?}",
+            feature_name,
+            default,
+            context
+        );
+        assert!(
+            self.enable_str_features,
+            "String feature lookup not enabled"
+        );
+        let cache = self.cached_state();
+        let cache = match cache.as_ref() {
+            None => return false,
+            Some(cache) => cache,
+        };
+        cache.is_enabled_str(feature_name, context, default, &self.cached_state)
     }
 
     /// Memoize new features into the cached state
@@ -392,6 +593,7 @@ where
                         enabled: AtomicU64::new(0),
                         known: true,
                         feature_disabled: true,
+                        variants: vec![],
                     }
                 } else {
                     // TODO add variant support
@@ -403,12 +605,20 @@ where
                         // Graceful degradation: ignore this unknown strategy.
                         // TODO: add a logging layer and log it.
                     }
+                    // Only include variants where the weight is greater than zero to save filtering at query time
+                    let variants = feature
+                        .variants
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter(|v| v.weight > 0)
+                        .collect();
                     CachedFeature {
                         strategies,
                         disabled: AtomicU64::new(0),
                         enabled: AtomicU64::new(0),
                         known: true,
                         feature_disabled: false,
+                        variants,
                     }
                 }
             };
@@ -570,6 +780,32 @@ where
     }
 }
 
+// DisplayForEnum
+
+/// Adapts an Enum to have Display for _get_variant so we can give consistent
+/// results between get_variant and get_variant_str on the same feature.
+struct EnumToString<T>(T)
+where
+    T: Debug;
+
+impl<T> Debug for EnumToString<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        self.0.fmt(formatter)
+    }
+}
+
+impl<T> Display for EnumToString<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        self.0.fmt(formatter)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::hash_map::HashMap;
@@ -580,9 +816,9 @@ mod tests {
     use maplit::hashmap;
     use serde::{Deserialize, Serialize};
 
-    use super::ClientBuilder;
-    use crate::api::{Feature, Features, Strategy};
-    use crate::context::Context;
+    use super::{ClientBuilder, Variant};
+    use crate::api::{self, Feature, Features, Strategy};
+    use crate::context::{Context, IPAddress};
     use crate::strategy;
 
     fn features() -> Features {
@@ -784,6 +1020,7 @@ mod tests {
                 .unwrap_or(false)
         })
     }
+
     #[test]
     fn test_custom_strategy() {
         let _ = simple_logger::SimpleLogger::new()
@@ -856,5 +1093,249 @@ mod tests {
         // adding custom strategies shouldn't disable built-in ones
         // default should be enabled, no context needed
         assert_eq!(true, client.is_enabled(UserFeatures::default, None, false));
+    }
+
+    fn variant_features() -> Features {
+        Features {
+            version: 1,
+            features: vec![
+                Feature {
+                    description: "disabled".into(),
+                    enabled: false,
+                    created_at: None,
+                    variants: None,
+                    name: "disabled".into(),
+                    strategies: vec![],
+                },
+                Feature {
+                    description: "novariants".into(),
+                    enabled: true,
+                    created_at: None,
+                    variants: None,
+                    name: "novariants".into(),
+                    strategies: vec![Strategy {
+                        name: "default".into(),
+                        parameters: None,
+                    }],
+                },
+                Feature {
+                    description: "one".into(),
+                    enabled: true,
+                    created_at: None,
+                    variants: Some(vec![api::Variant {
+                        name: "variantone".into(),
+                        weight: 100,
+                        payload: Some(hashmap![
+                            "type".into() => "string".into(),
+                            "value".into() => "val1".into()]),
+                        overrides: None,
+                    }]),
+                    name: "one".into(),
+                    strategies: vec![],
+                },
+                Feature {
+                    description: "two".into(),
+                    enabled: true,
+                    created_at: None,
+                    variants: Some(vec![
+                        api::Variant {
+                            name: "variantone".into(),
+                            weight: 50,
+                            payload: Some(hashmap![
+                            "type".into() => "string".into(),
+                            "value".into() => "val1".into()]),
+                            overrides: None,
+                        },
+                        api::Variant {
+                            name: "varianttwo".into(),
+                            weight: 50,
+                            payload: Some(hashmap![
+                            "type".into() => "string".into(),
+                            "value".into() => "val2".into()]),
+                            overrides: None,
+                        },
+                    ]),
+                    name: "two".into(),
+                    strategies: vec![],
+                },
+                Feature {
+                    description: "nostrategies".into(),
+                    enabled: true,
+                    created_at: None,
+                    variants: None,
+                    name: "nostrategies".into(),
+                    strategies: vec![],
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn variants_enum() {
+        let _ = simple_logger::SimpleLogger::new()
+            .with_module_level("isahc::agent", log::LevelFilter::Off)
+            .with_module_level("tracing::span", log::LevelFilter::Off)
+            .with_module_level("tracing::span::active", log::LevelFilter::Off)
+            .init();
+        let f = variant_features();
+        // with an enum
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum UserFeatures {
+            disabled,
+            novariants,
+            one,
+            two,
+        }
+        let c = ClientBuilder::default()
+            .into_client::<http_client::native::NativeClient, UserFeatures>(
+                "http://127.0.0.1:1234/",
+                "foo",
+                "test",
+                None,
+            )
+            .unwrap();
+
+        c.memoize(f.features).unwrap();
+
+        // disabled should be disabled
+        let variant = Variant::disabled();
+        assert_eq!(
+            variant,
+            c.get_variant(UserFeatures::disabled, &Context::default())
+        );
+
+        // enabled no variants should get the disabled variant
+        let variant = Variant::disabled();
+        assert_eq!(
+            variant,
+            c.get_variant(UserFeatures::novariants, &Context::default())
+        );
+
+        // One variant
+        let variant = Variant {
+            name: "variantone".to_string(),
+            payload: hashmap![
+                "type".into()=>"string".into(),
+                "value".into()=>"val1".into()
+            ],
+            enabled: true,
+        };
+        assert_eq!(
+            variant,
+            c.get_variant(UserFeatures::one, &Context::default())
+        );
+
+        // Two variants
+        let uid1: Context = Context {
+            user_id: Some("user1".into()),
+            ..Default::default()
+        };
+        let session1: Context = Context {
+            session_id: Some("session1".into()),
+            ..Default::default()
+        };
+        let host1: Context = Context {
+            remote_address: Some(IPAddress::parse("10.10.10.11").unwrap()),
+            ..Default::default()
+        };
+        let variant1 = Variant {
+            name: "variantone".to_string(),
+            payload: hashmap![
+                "type".into()=>"string".into(),
+                "value".into()=>"val1".into()
+            ],
+            enabled: true,
+        };
+        let variant2 = Variant {
+            name: "varianttwo".to_string(),
+            payload: hashmap![
+                "type".into()=>"string".into(),
+                "value".into()=>"val2".into()
+            ],
+            enabled: true,
+        };
+        assert_eq!(variant2, c.get_variant(UserFeatures::two, &uid1));
+        assert_eq!(variant2, c.get_variant(UserFeatures::two, &session1));
+        assert_eq!(variant1, c.get_variant(UserFeatures::two, &host1));
+    }
+
+    #[test]
+    fn variants_str() {
+        let _ = simple_logger::SimpleLogger::new()
+            .with_module_level("isahc::agent", log::LevelFilter::Off)
+            .with_module_level("tracing::span", log::LevelFilter::Off)
+            .with_module_level("tracing::span::active", log::LevelFilter::Off)
+            .init();
+        let f = variant_features();
+        // without the enum API
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum NoFeatures {}
+        let c = ClientBuilder::default()
+            .enable_string_features()
+            .into_client::<http_client::native::NativeClient, NoFeatures>(
+                "http://127.0.0.1:1234/",
+                "foo",
+                "test",
+                None,
+            )
+            .unwrap();
+
+        c.memoize(f.features).unwrap();
+
+        // disabled should be disabled
+        let variant = Variant::disabled();
+        assert_eq!(variant, c.get_variant_str("disabled", &Context::default()));
+
+        // enabled no variants should get the disabled variant
+        let variant = Variant::disabled();
+        assert_eq!(
+            variant,
+            c.get_variant_str("novariants", &Context::default())
+        );
+
+        // One variant
+        let variant = Variant {
+            name: "variantone".to_string(),
+            payload: hashmap![
+                "type".into()=>"string".into(),
+                "value".into()=>"val1".into()
+            ],
+            enabled: true,
+        };
+        assert_eq!(variant, c.get_variant_str("one", &Context::default()));
+
+        // Two variants
+        let uid1: Context = Context {
+            user_id: Some("user1".into()),
+            ..Default::default()
+        };
+        let session1: Context = Context {
+            session_id: Some("session1".into()),
+            ..Default::default()
+        };
+        let host1: Context = Context {
+            remote_address: Some(IPAddress::parse("10.10.10.11").unwrap()),
+            ..Default::default()
+        };
+        let variant1 = Variant {
+            name: "variantone".to_string(),
+            payload: hashmap![
+                "type".into()=>"string".into(),
+                "value".into()=>"val1".into()
+            ],
+            enabled: true,
+        };
+        let variant2 = Variant {
+            name: "varianttwo".to_string(),
+            payload: hashmap![
+                "type".into()=>"string".into(),
+                "value".into()=>"val2".into()
+            ],
+            enabled: true,
+        };
+        assert_eq!(variant2, c.get_variant_str("two", &uid1));
+        assert_eq!(variant2, c.get_variant_str("two", &session1));
+        assert_eq!(variant1, c.get_variant_str("two", &host1));
     }
 }
