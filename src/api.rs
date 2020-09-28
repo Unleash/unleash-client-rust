@@ -31,11 +31,31 @@ pub struct Feature {
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug)]
 // #[serde(deny_unknown_fields)]
 pub struct Strategy {
+    pub constraints: Option<Vec<Constraint>>,
     pub name: String,
     pub parameters: Option<HashMap<String, String>>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+// #[serde(deny_unknown_fields)]
+pub struct Constraint {
+    #[serde(rename = "contextName")]
+    pub context_name: String,
+    #[serde(flatten)]
+    pub expression: ConstraintExpression,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(tag = "operator", content = "values")]
+// #[serde(deny_unknown_fields)]
+pub enum ConstraintExpression {
+    #[serde(rename = "IN")]
+    In(Vec<String>),
+    #[serde(rename = "NOT_IN")]
+    NotIn(Vec<String>),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

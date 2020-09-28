@@ -600,7 +600,11 @@ where
                     let mut strategies = vec![];
                     for api_strategy in feature.strategies {
                         if let Some(code_strategy) = source_strategies.get(&api_strategy.name) {
-                            strategies.push(code_strategy(api_strategy.parameters));
+                            strategies.push(strategy::constrain(
+                                api_strategy.constraints,
+                                code_strategy,
+                                api_strategy.parameters,
+                            ));
                         }
                         // Graceful degradation: ignore this unknown strategy.
                         // TODO: add a logging layer and log it.
@@ -810,15 +814,17 @@ where
 mod tests {
     use std::collections::hash_map::HashMap;
     use std::collections::hash_set::HashSet;
+    use std::default::Default;
     use std::hash::BuildHasher;
 
     use enum_map::Enum;
+    use ipaddress::IPAddress;
     use maplit::hashmap;
     use serde::{Deserialize, Serialize};
 
     use super::{ClientBuilder, Variant};
     use crate::api::{self, Feature, Features, Strategy};
-    use crate::context::{Context, IPAddress};
+    use crate::context::Context;
     use crate::strategy;
 
     fn features() -> Features {
@@ -833,7 +839,7 @@ mod tests {
                     name: "default".into(),
                     strategies: vec![Strategy {
                         name: "default".into(),
-                        parameters: None,
+                        ..Default::default()
                     }],
                 },
                 Feature {
@@ -845,6 +851,7 @@ mod tests {
                     strategies: vec![Strategy {
                         name: "userWithId".into(),
                         parameters: Some(hashmap!["userIds".into()=>"present".into()]),
+                        ..Default::default()
                     }],
                 },
                 Feature {
@@ -857,10 +864,11 @@ mod tests {
                         Strategy {
                             name: "userWithId".into(),
                             parameters: Some(hashmap!["userIds".into()=>"present".into()]),
+                            ..Default::default()
                         },
                         Strategy {
                             name: "default".into(),
-                            parameters: None,
+                            ..Default::default()
                         },
                     ],
                 },
@@ -872,7 +880,7 @@ mod tests {
                     name: "disabled".into(),
                     strategies: vec![Strategy {
                         name: "default".into(),
-                        parameters: None,
+                        ..Default::default()
                     }],
                 },
                 Feature {
@@ -1055,7 +1063,7 @@ mod tests {
                     name: "default".into(),
                     strategies: vec![Strategy {
                         name: "default".into(),
-                        parameters: None,
+                        ..Default::default()
                     }],
                 },
                 Feature {
@@ -1067,6 +1075,7 @@ mod tests {
                     strategies: vec![Strategy {
                         name: "reversed".into(),
                         parameters: Some(hashmap!["userIds".into()=>"abc".into()]),
+                        ..Default::default()
                     }],
                 },
             ],
@@ -1115,7 +1124,7 @@ mod tests {
                     name: "novariants".into(),
                     strategies: vec![Strategy {
                         name: "default".into(),
-                        parameters: None,
+                        ..Default::default()
                     }],
                 },
                 Feature {
