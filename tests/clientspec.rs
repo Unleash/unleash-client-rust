@@ -95,12 +95,7 @@ mod tests {
             enum NoFeatures {}
             let c = client::ClientBuilder::default()
                 .enable_string_features()
-                .into_client::<http_client::native::NativeClient, NoFeatures>(
-                    "http://127.0.0.1:1234/",
-                    "foo",
-                    "test",
-                    None,
-                )
+                .into_client::<NoFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
                 .unwrap();
             log::info!("Using features {:?}", &suite.state.features);
             c.memoize(suite.state.features).unwrap();

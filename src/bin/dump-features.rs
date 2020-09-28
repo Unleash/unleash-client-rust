@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     task::block_on(async {
         let config = EnvironmentConfig::from_env()?;
         let endpoint = api::Features::endpoint(&config.api_url);
-        let client: http::HTTP<http_client::native::NativeClient> =
+        let client: http::HTTP =
             http::HTTP::new(config.app_name, config.instance_id, config.secret)?;
         let res: api::Features = client.get(endpoint).recv_json().await?;
         dbg!(res);

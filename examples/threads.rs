@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     let client = Arc::new(
         client::ClientBuilder::default()
             .interval(500)
-            .into_client::<http_client::native::NativeClient, UserFeatures>(
+            .into_client::<UserFeatures>(
                 &config.api_url,
                 &config.app_name,
                 &config.instance_id,

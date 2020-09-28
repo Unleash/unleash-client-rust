@@ -61,15 +61,14 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
-    pub fn into_client<C, F>(
+    pub fn into_client<F>(
         self,
         api_url: &str,
         app_name: &str,
         instance_id: &str,
         authorization: Option<String>,
-    ) -> Result<Client<C, F>, http_client::Error>
+    ) -> Result<Client<F>, http_client::Error>
     where
-        C: http_client::HttpClient + Default,
         F: Enum<CachedFeature> + Debug + DeserializeOwned + Serialize,
     {
         Ok(Client {
@@ -167,9 +166,8 @@ where
     }
 }
 
-pub struct Client<C, F>
+pub struct Client<F>
 where
-    C: http_client::HttpClient,
     F: Enum<CachedFeature> + Debug + DeserializeOwned + Serialize,
 {
     api_url: String,
@@ -180,7 +178,7 @@ where
     interval: u64,
     polling: AtomicBool,
     // Permits making extension calls to the Unleash API not yet modelled in the Rust SDK.
-    pub http: HTTP<C>,
+    pub http: HTTP,
     // known strategies: strategy_name : memoiser
     strategies: Mutex<HashMap<String, strategy::Strategy>>,
     // memoised state: feature_name: [callback, callback, ...]
@@ -386,9 +384,8 @@ where
     }
 }
 
-impl<C, F> Client<C, F>
+impl<F> Client<F>
 where
-    C: http_client::HttpClient + std::default::Default,
     F: Enum<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
 {
     /// The cached state can be accessed. It may be uninitialised, and
@@ -705,9 +702,9 @@ where
                     Ok(Some(metrics)) => {
                         if !self.disable_metric_submission {
                             let mut metrics_uploaded = false;
-                            let req = self.http.post(&metrics_endpoint).body_json(&metrics);
-                            if let Ok(req) = req {
-                                let res = req.await;
+                            let req = self.http.post(&metrics_endpoint);
+                            if let Ok(body) = http_types::Body::from_json(&metrics) {
+                                let res = req.body(body).await;
                                 if let Ok(res) = res {
                                     if res.status().is_success() {
                                         metrics_uploaded = true;
@@ -754,7 +751,7 @@ where
         let res = self
             .http
             .post(Registration::endpoint(&self.api_url))
-            .body_json(&registration)?
+            .body(http_types::Body::from_json(&registration)?)
             .await?;
         if !res.status().is_success() {
             return Err(anyhow::anyhow!("Failed to register with unleash API server").into());
@@ -915,12 +912,7 @@ mod tests {
             nostrategies,
         }
         let c = ClientBuilder::default()
-            .into_client::<http_client::native::NativeClient, UserFeatures>(
-                "http://127.0.0.1:1234/",
-                "foo",
-                "test",
-                None,
-            )
+            .into_client::<UserFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
             .unwrap();
 
         c.memoize(f.features).unwrap();
@@ -971,12 +963,7 @@ mod tests {
         enum NoFeatures {}
         let c = ClientBuilder::default()
             .enable_string_features()
-            .into_client::<http_client::native::NativeClient, NoFeatures>(
-                "http://127.0.0.1:1234/",
-                "foo",
-                "test",
-                None,
-            )
+            .into_client::<NoFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
             .unwrap();
 
         c.memoize(f.features).unwrap();
@@ -1043,12 +1030,7 @@ mod tests {
         }
         let client = ClientBuilder::default()
             .strategy("reversed", Box::new(&_reversed_uids))
-            .into_client::<http_client::native::NativeClient, UserFeatures>(
-                "http://127.0.0.1:1234/",
-                "foo",
-                "test",
-                None,
-            )
+            .into_client::<UserFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
             .unwrap();
 
         let f = Features {
@@ -1196,12 +1178,7 @@ mod tests {
             two,
         }
         let c = ClientBuilder::default()
-            .into_client::<http_client::native::NativeClient, UserFeatures>(
-                "http://127.0.0.1:1234/",
-                "foo",
-                "test",
-                None,
-            )
+            .into_client::<UserFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
             .unwrap();
 
         c.memoize(f.features).unwrap();
@@ -1283,12 +1260,7 @@ mod tests {
         enum NoFeatures {}
         let c = ClientBuilder::default()
             .enable_string_features()
-            .into_client::<http_client::native::NativeClient, NoFeatures>(
-                "http://127.0.0.1:1234/",
-                "foo",
-                "test",
-                None,
-            )
+            .into_client::<NoFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
             .unwrap();
 
         c.memoize(f.features).unwrap();
