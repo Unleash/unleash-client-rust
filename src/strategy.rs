@@ -144,7 +144,7 @@ fn _user_id<S: BuildHasher>(
 }
 
 /// https://unleash.github.io/docs/activation_strategy#flexiblerollout
-/// stickiness: [DEFAULT|USERID|SESSIONID|RANDOM]
+/// stickiness: [default|userId|sessionId|random]
 /// groupId: hash key
 /// rollout: percentage
 pub fn flexible_rollout<S: BuildHasher>(
@@ -160,7 +160,7 @@ pub fn flexible_rollout<S: BuildHasher>(
     } else {
         return Box::new(|_| false);
     } {
-        "DEFAULT" => {
+        "default" => {
             // user, session, random in that order.
             let (group, rollout) = group_and_rollout(&parameters, "rollout");
             Box::new(move |context: &Context| -> bool {
@@ -174,9 +174,9 @@ pub fn flexible_rollout<S: BuildHasher>(
                 }
             })
         }
-        "USERID" => _user_id(parameters, "rollout"),
-        "SESSIONID" => _session_id(parameters, "rollout"),
-        "RANDOM" => _random(parameters, "rollout"),
+        "userId" => _user_id(parameters, "rollout"),
+        "sessionId" => _session_id(parameters, "rollout"),
+        "random" => _random(parameters, "rollout"),
         _ => Box::new(|_| false),
     }
 }
@@ -699,16 +699,16 @@ mod tests {
 
     #[test]
     fn test_flexible_rollout() {
-        // RANDOM
+        // random
         let params: HashMap<String, String> = hashmap! {
-            "stickiness".into() => "RANDOM".into(),
+            "stickiness".into() => "random".into(),
             "rollout".into() => "0".into(),
         };
         let c: Context = Default::default();
         assert_eq!(false, super::flexible_rollout(Some(params))(&c));
 
         let params: HashMap<String, String> = hashmap! {
-            "stickiness".into() => "RANDOM".into(),
+            "stickiness".into() => "random".into(),
             "rollout".into() => "100".into(),
         };
         let c: Context = Default::default();
@@ -716,9 +716,9 @@ mod tests {
 
         // Could parameterise this by SESSION and USER, but its barely long
         // enough to bother and the explicitness in failures has merit.
-        // SESSIONID
+        // sessionId
         let params: HashMap<String, String> = hashmap! {
-            "stickiness".into() => "SESSIONID".into(),
+            "stickiness".into() => "sessionId".into(),
             "groupId".into() => "group1".into(),
             "rollout".into() => "0".into(),
         };
@@ -728,7 +728,7 @@ mod tests {
         };
         assert_eq!(false, super::flexible_rollout(Some(params))(&c));
         let params: HashMap<String, String> = hashmap! {
-            "stickiness".into() => "SESSIONID".into(),
+            "stickiness".into() => "sessionId".into(),
             "groupId".into() => "group1".into(),
             "rollout".into() => "100".into(),
         };
@@ -739,7 +739,7 @@ mod tests {
         assert_eq!(true, super::flexible_rollout(Some(params))(&c));
         // Check rollout works
         let params: HashMap<String, String> = hashmap! {
-            "stickiness".into() => "SESSIONID".into(),
+            "stickiness".into() => "sessionId".into(),
             "groupId".into() => "group1".into(),
             "rollout".into() => "50".into(),
         };
@@ -755,7 +755,7 @@ mod tests {
         assert_eq!(false, super::flexible_rollout(Some(params))(&c));
         // Check groupId modifies the hash order
         let params: HashMap<String, String> = hashmap! {
-            "stickiness".into() => "SESSIONID".into(),
+            "stickiness".into() => "sessionId".into(),
             "groupId".into() => "group3".into(),
             "rollout".into() => "50".into(),
         };
@@ -770,9 +770,9 @@ mod tests {
         };
         assert_eq!(true, super::flexible_rollout(Some(params))(&c));
 
-        // USERID
+        // userId
         let params: HashMap<String, String> = hashmap! {
-            "stickiness".into() => "USERID".into(),
+            "stickiness".into() => "userId".into(),
             "groupId".into() => "group1".into(),
             "rollout".into() => "0".into(),
         };
@@ -782,7 +782,7 @@ mod tests {
         };
         assert_eq!(false, super::flexible_rollout(Some(params))(&c));
         let params: HashMap<String, String> = hashmap! {
-            "stickiness".into() => "USERID".into(),
+            "stickiness".into() => "userId".into(),
             "groupId".into() => "group1".into(),
             "rollout".into() => "100".into(),
         };
@@ -793,7 +793,7 @@ mod tests {
         assert_eq!(true, super::flexible_rollout(Some(params))(&c));
         // Check rollout works
         let params: HashMap<String, String> = hashmap! {
-            "stickiness".into() => "USERID".into(),
+            "stickiness".into() => "userId".into(),
             "groupId".into() => "group1".into(),
             "rollout".into() => "50".into(),
         };
@@ -809,7 +809,7 @@ mod tests {
         assert_eq!(false, super::flexible_rollout(Some(params))(&c));
         // Check groupId modifies the hash order
         let params: HashMap<String, String> = hashmap! {
-            "stickiness".into() => "USERID".into(),
+            "stickiness".into() => "userId".into(),
             "groupId".into() => "group2".into(),
             "rollout".into() => "50".into(),
         };

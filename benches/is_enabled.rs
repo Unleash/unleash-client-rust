@@ -177,7 +177,7 @@ fn client(count: usize) -> client::Client<http_client::native::NativeClient, Use
             name: name,
             strategies: vec![Strategy {
                 name: "flexibleRollout".into(),
-                parameters: Some(hashmap!["stickiness".into()=>"DEFAULT".into(),
+                parameters: Some(hashmap!["stickiness".into()=>"default".into(),
                     "groupId".into()=>"flexible".into(), "rollout".into()=>"33".into()]),
                 ..Default::default()
             }],
@@ -191,7 +191,7 @@ fn client(count: usize) -> client::Client<http_client::native::NativeClient, Use
             name: name,
             strategies: vec![Strategy {
                 name: "flexibleRollout".into(),
-                parameters: Some(hashmap!["stickiness".into()=>"DEFAULT".into(),
+                parameters: Some(hashmap!["stickiness".into()=>"default".into(),
                     "groupId".into()=>"flexible".into(), "rollout".into()=>"33".into()]),
                 ..Default::default()
             }],
