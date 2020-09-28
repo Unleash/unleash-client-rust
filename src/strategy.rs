@@ -5,9 +5,11 @@ use std::collections::hash_set::HashSet;
 use std::hash::BuildHasher;
 use std::io::Cursor;
 
+use log::{trace, warn};
 use murmur3::murmur3_32;
 use rand::Rng;
 
+use crate::api::{Constraint, ConstraintExpression};
 use crate::context::Context;
 
 /// Memoise feature state for a strategy.
@@ -269,6 +271,156 @@ pub fn hostname<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) 
     Box::new(move |_: &Context| -> bool { result })
 }
 
+/// returns true if the strategy should be delegated to, false to disable
+fn _compile_constraint_string<F>(expression: ConstraintExpression, getter: F) -> Evaluate
+where
+    F: Fn(&Context) -> Option<&String> + Clone + Sync + Send + 'static,
+{
+    match &expression {
+        ConstraintExpression::In(values) => {
+            let as_set: HashSet<String> = values.iter().cloned().collect();
+            Box::new(move |context: &Context| {
+                getter(context).map(|v| as_set.contains(v)).unwrap_or(false)
+            })
+        }
+        ConstraintExpression::NotIn(values) => {
+            if values.is_empty() {
+                Box::new(|_| true)
+            } else {
+                let as_set: HashSet<String> = values.iter().cloned().collect();
+                Box::new(move |context: &Context| {
+                    getter(context)
+                        .map(|v| !as_set.contains(v))
+                        .unwrap_or(false)
+                })
+            }
+        }
+    }
+}
+
+fn _ip_to_vec(ips: &[String]) -> Vec<ipaddress::IPAddress> {
+    let mut result = Vec::new();
+    for ip_str in ips {
+        let ip_parsed = ipaddress::IPAddress::parse(ip_str.trim());
+        if let Ok(ip) = ip_parsed {
+            result.push(ip);
+        } else {
+            warn!("Could not parse IP address {:?}", ip_str);
+        }
+    }
+    result
+}
+
+/// returns true if the strategy should be delegated to, false to disable
+fn _compile_constraint_host<F>(expression: ConstraintExpression, getter: F) -> Evaluate
+where
+    F: Fn(&Context) -> Option<&ipaddress::IPAddress> + Clone + Sync + Send + 'static,
+{
+    match &expression {
+        ConstraintExpression::In(values) => {
+            let ips = _ip_to_vec(values);
+            Box::new(move |context: &Context| {
+                getter(context)
+                    .map(|remote_address| {
+                        for ip in &ips {
+                            if ip.includes(&remote_address) {
+                                return true;
+                            }
+                        }
+                        false
+                    })
+                    .unwrap_or(false)
+            })
+        }
+        ConstraintExpression::NotIn(values) => {
+            if values.is_empty() {
+                Box::new(|_| false)
+            } else {
+                let ips = _ip_to_vec(values);
+                Box::new(move |context: &Context| {
+                    getter(context)
+                        .map(|remote_address| {
+                            if ips.is_empty() {
+                                return false;
+                            }
+                            for ip in &ips {
+                                if ip.includes(&remote_address) {
+                                    return false;
+                                }
+                            }
+                            true
+                        })
+                        .unwrap_or(false)
+                })
+            }
+        }
+    }
+}
+
+fn _compile_constraints(constraints: Vec<Constraint>) -> Vec<Evaluate> {
+    constraints
+        .into_iter()
+        .map(|constraint| {
+            let (context_name, expression) = (constraint.context_name, constraint.expression);
+            match context_name.as_str() {
+                "appName" => {
+                    _compile_constraint_string(expression, |context| Some(&context.app_name))
+                }
+                "environment" => {
+                    _compile_constraint_string(expression, |context| Some(&context.environment))
+                }
+                "remoteAddress" => {
+                    _compile_constraint_host(expression, |context| context.remote_address.as_ref())
+                }
+                "sessionId" => {
+                    _compile_constraint_string(expression, |context| context.session_id.as_ref())
+                }
+                "userId" => {
+                    _compile_constraint_string(expression, |context| context.user_id.as_ref())
+                }
+                _ => _compile_constraint_string(expression, move |context| {
+                    context.properties.get(&context_name)
+                }),
+            }
+        })
+        .collect()
+}
+
+/// This function is a strategy decorator which compiles to nothing when
+/// there are no constraints, or to a constraint evaluating test if there are.
+pub fn constrain<S: Fn(Option<HashMap<String, String>>) -> Evaluate + Sync + Send + 'static>(
+    constraints: Option<Vec<Constraint>>,
+    strategy: &S,
+    parameters: Option<HashMap<String, String>>,
+) -> Evaluate {
+    let compiled_strategy = strategy(parameters);
+    match constraints {
+        None => {
+            trace!("constrain: no constraints, bypassing");
+            compiled_strategy
+        }
+        Some(constraints) => {
+            if constraints.is_empty() {
+                trace!("constrain: empty constraints list, bypassing");
+                compiled_strategy
+            } else {
+                trace!("constrain: compiling constraints list {:?}", constraints);
+                let constraints = _compile_constraints(constraints);
+                // Create a closure that will evaluate against the context.
+                Box::new(move |context| {
+                    // Check every constraint; if all match, permit
+                    for constraint in &constraints {
+                        if !constraint(&context) {
+                            return false;
+                        }
+                    }
+                    compiled_strategy(context)
+                })
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::hash_map::HashMap;
@@ -277,7 +429,245 @@ mod tests {
     use ipaddress::IPAddress;
     use maplit::hashmap;
 
+    use crate::api::{Constraint, ConstraintExpression};
     use crate::context::Context;
+
+    fn parse_ip(addr: &str) -> Option<IPAddress> {
+        Some(IPAddress::parse(addr).unwrap())
+    }
+
+    #[test]
+    fn test_constrain() {
+        // Without constraints, things should just pass through
+        let context = Context::default();
+        assert_eq!(
+            true,
+            super::constrain(None, &super::default, None)(&context)
+        );
+
+        // An empty constraint list acts like a missing one
+        let context = Context::default();
+        assert_eq!(
+            true,
+            super::constrain(Some(vec![]), &super::default, None)(&context)
+        );
+
+        // An empty constraint gets disabled
+        let context = Context {
+            environment: "development".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            false,
+            super::constrain(
+                Some(vec![Constraint {
+                    context_name: "".into(),
+                    expression: ConstraintExpression::In(vec![]),
+                }]),
+                &super::default,
+                None
+            )(&context)
+        );
+
+        // A mismatched constraint acts like an empty constraint
+        let context = Context {
+            environment: "production".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            false,
+            super::constrain(
+                Some(vec![Constraint {
+                    context_name: "environment".into(),
+                    expression: ConstraintExpression::In(vec!["development".into()]),
+                }]),
+                &super::default,
+                None
+            )(&context)
+        );
+
+        // a matched Not In acts like an empty constraint
+        let context = Context {
+            environment: "development".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            false,
+            super::constrain(
+                Some(vec![Constraint {
+                    context_name: "environment".into(),
+                    expression: ConstraintExpression::NotIn(vec!["development".into()]),
+                }]),
+                &super::default,
+                None
+            )(&context)
+        );
+
+        // a matched In in either first or second (etc) places delegates
+        let context = Context {
+            environment: "development".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            true,
+            super::constrain(
+                Some(vec![Constraint {
+                    context_name: "environment".into(),
+                    expression: ConstraintExpression::In(vec!["development".into()]),
+                }]),
+                &super::default,
+                None
+            )(&context)
+        );
+        // second place
+        let context = Context {
+            environment: "development".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            true,
+            super::constrain(
+                Some(vec![Constraint {
+                    context_name: "environment".into(),
+                    expression: ConstraintExpression::In(vec![
+                        "staging".into(),
+                        "development".into()
+                    ]),
+                }]),
+                &super::default,
+                None
+            )(&context)
+        );
+
+        // a not matched Not In across 1st and second etc delegates
+        let context = Context {
+            environment: "production".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            true,
+            super::constrain(
+                Some(vec![Constraint {
+                    context_name: "environment".into(),
+                    expression: ConstraintExpression::NotIn(vec![
+                        "staging".into(),
+                        "development".into()
+                    ]),
+                }]),
+                &super::default,
+                None
+            )(&context)
+        );
+
+        // Context keys can be chosen by the context_name field:
+        // .environment is used above.
+        // .user_id
+        let context = Context {
+            user_id: Some("fred".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            true,
+            super::constrain(
+                Some(vec![Constraint {
+                    context_name: "userId".into(),
+                    expression: ConstraintExpression::In(vec!["fred".into()]),
+                }]),
+                &super::default,
+                None
+            )(&context)
+        );
+
+        // .session_id
+        let context = Context {
+            session_id: Some("qwerty".into()),
+            ..Default::default()
+        };
+        assert_eq!(
+            true,
+            super::constrain(
+                Some(vec![Constraint {
+                    context_name: "sessionId".into(),
+                    expression: ConstraintExpression::In(vec!["qwerty".into()]),
+                }]),
+                &super::default,
+                None
+            )(&context)
+        );
+
+        // .remote_address
+        let context = Context {
+            remote_address: parse_ip("10.20.30.40"),
+            ..Default::default()
+        };
+        assert_eq!(
+            true,
+            super::constrain(
+                Some(vec![Constraint {
+                    context_name: "remoteAddress".into(),
+                    expression: ConstraintExpression::In(vec!["10.0.0.0/8".into()]),
+                }]),
+                &super::default,
+                None
+            )(&context)
+        );
+        let context = Context {
+            remote_address: parse_ip("1.2.3.4"),
+            ..Default::default()
+        };
+        assert_eq!(
+            true,
+            super::constrain(
+                Some(vec![Constraint {
+                    context_name: "remoteAddress".into(),
+                    expression: ConstraintExpression::NotIn(vec!["10.0.0.0/8".into()]),
+                }]),
+                &super::default,
+                None
+            )(&context)
+        );
+
+        // multiple constraints are ANDed together
+        let context = Context {
+            environment: "development".into(),
+            ..Default::default()
+        };
+        // true ^ true => true
+        assert_eq!(
+            true,
+            super::constrain(
+                Some(vec![
+                    Constraint {
+                        context_name: "environment".into(),
+                        expression: ConstraintExpression::In(vec!["development".into()]),
+                    },
+                    Constraint {
+                        context_name: "environment".into(),
+                        expression: ConstraintExpression::In(vec!["development".into()]),
+                    },
+                ]),
+                &super::default,
+                None
+            )(&context)
+        );
+        assert_eq!(
+            false,
+            super::constrain(
+                Some(vec![
+                    Constraint {
+                        context_name: "environment".into(),
+                        expression: ConstraintExpression::In(vec!["development".into()]),
+                    },
+                    Constraint {
+                        context_name: "environment".into(),
+                        expression: ConstraintExpression::In(vec![]),
+                    }
+                ]),
+                &super::default,
+                None
+            )(&context)
+        );
+    }
 
     #[test]
     fn test_user_with_id() {
@@ -306,6 +696,7 @@ mod tests {
             })
         );
     }
+
     #[test]
     fn test_flexible_rollout() {
         // RANDOM

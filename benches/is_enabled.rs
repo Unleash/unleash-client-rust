@@ -179,6 +179,7 @@ fn client(count: usize) -> client::Client<http_client::native::NativeClient, Use
                 name: "flexibleRollout".into(),
                 parameters: Some(hashmap!["stickiness".into()=>"DEFAULT".into(),
                     "groupId".into()=>"flexible".into(), "rollout".into()=>"33".into()]),
+                ..Default::default()
             }],
         });
         let name = format!("flexible{}", i);
@@ -192,6 +193,7 @@ fn client(count: usize) -> client::Client<http_client::native::NativeClient, Use
                 name: "flexibleRollout".into(),
                 parameters: Some(hashmap!["stickiness".into()=>"DEFAULT".into(),
                     "groupId".into()=>"flexible".into(), "rollout".into()=>"33".into()]),
+                ..Default::default()
             }],
         });
     }
