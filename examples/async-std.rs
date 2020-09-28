@@ -27,12 +27,12 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let config = EnvironmentConfig::from_env()?;
         let client = client::ClientBuilder::default()
             .interval(500)
-            .into_client::<http_client::native::NativeClient, UserFeatures>(
-            &config.api_url,
-            &config.app_name,
-            &config.instance_id,
-            config.secret,
-        )?;
+            .into_client::<UserFeatures>(
+                &config.api_url,
+                &config.app_name,
+                &config.instance_id,
+                config.secret,
+            )?;
         client.register().await?;
         futures::future::join(client.poll_for_updates(), async {
             // Ensure we have features for this demo.

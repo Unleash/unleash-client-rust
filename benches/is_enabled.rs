@@ -158,12 +158,10 @@ enum UserFeatures {
     Unknown63,
 }
 
-fn client(count: usize) -> client::Client<http_client::native::NativeClient, UserFeatures> {
+fn client(count: usize) -> client::Client<UserFeatures> {
     let client = client::ClientBuilder::default()
         .enable_string_features()
-        .into_client::<http_client::native::NativeClient, UserFeatures>(
-            "notused", "app", "test", None,
-        )
+        .into_client::<UserFeatures>("notused", "app", "test", None)
         .unwrap();
     let mut features = vec![];
     for i in 0..count {

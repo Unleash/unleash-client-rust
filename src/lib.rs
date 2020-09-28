@@ -65,7 +65,7 @@
 //!         let config = EnvironmentConfig::from_env()?;
 //!         let client = client::ClientBuilder::default()
 //!             .strategy("reversed", Box::new(&_reversed_uids))
-//!             .into_client::<http_client::native::NativeClient, UserFeatures>(
+//!             .into_client::<UserFeatures>(
 //!                 &config.api_url,
 //!                 &config.app_name,
 //!                 &config.instance_id,
@@ -113,7 +113,7 @@ pub use crate::strategy::Evaluate;
 /// }
 ///
 /// let client = ClientBuilder::default()
-///     .into_client::<http_client::native::NativeClient, UserFeatures>(
+///     .into_client::<UserFeatures>(
 ///         &config.api_url,
 ///         &config.app_name,
 ///         &config.instance_id,

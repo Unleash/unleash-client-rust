@@ -23,9 +23,7 @@ mod tests {
         let _ = simple_logger::init();
         task::block_on(async {
             let config = EnvironmentConfig::from_env()?;
-            let client = client::ClientBuilder::default()
-                .interval(500)
-                .into_client::<http_client::native::NativeClient>(
+            let client = client::ClientBuilder::default().interval(500).into_client(
                 &config.api_url,
                 &config.app_name,
                 &config.instance_id,
@@ -50,16 +48,12 @@ mod tests {
     fn test_smoke_threaded() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
         let _ = simple_logger::init();
         let config = EnvironmentConfig::from_env()?;
-        let client = Arc::new(
-            client::ClientBuilder::default()
-                .interval(500)
-                .into_client::<http_client::native::NativeClient>(
-                    &config.api_url,
-                    &config.app_name,
-                    &config.instance_id,
-                    config.secret,
-                )?,
-        );
+        let client = Arc::new(client::ClientBuilder::default().interval(500).into_client(
+            &config.api_url,
+            &config.app_name,
+            &config.instance_id,
+            config.secret,
+        )?);
         task::block_on(async {
             if let Err(e) = client.register().await {
                 return Err(e);
