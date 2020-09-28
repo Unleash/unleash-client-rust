@@ -818,13 +818,12 @@ mod tests {
     use std::hash::BuildHasher;
 
     use enum_map::Enum;
-    use ipaddress::IPAddress;
     use maplit::hashmap;
     use serde::{Deserialize, Serialize};
 
     use super::{ClientBuilder, Variant};
     use crate::api::{self, Feature, Features, Strategy};
-    use crate::context::Context;
+    use crate::context::{Context, IPAddress};
     use crate::strategy;
 
     fn features() -> Features {
@@ -1245,7 +1244,9 @@ mod tests {
             ..Default::default()
         };
         let host1: Context = Context {
-            remote_address: Some(IPAddress::parse("10.10.10.11").unwrap()),
+            remote_address: Some(IPAddress(
+                ipaddress::IPAddress::parse("10.10.10.10").unwrap(),
+            )),
             ..Default::default()
         };
         let variant1 = Variant {
@@ -1324,7 +1325,9 @@ mod tests {
             ..Default::default()
         };
         let host1: Context = Context {
-            remote_address: Some(IPAddress::parse("10.10.10.11").unwrap()),
+            remote_address: Some(IPAddress(
+                ipaddress::IPAddress::parse("10.10.10.10").unwrap(),
+            )),
             ..Default::default()
         };
         let variant1 = Variant {

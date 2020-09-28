@@ -23,6 +23,7 @@ impl Features {
 // #[serde(deny_unknown_fields)]
 pub struct Feature {
     pub name: String,
+    #[serde(default)]
     pub description: String,
     pub enabled: bool,
     pub strategies: Vec<Strategy>,

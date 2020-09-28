@@ -242,7 +242,7 @@ pub fn remote_address<S: BuildHasher>(parameters: Option<HashMap<String, String,
     Box::new(move |context: &Context| -> bool {
         if let Some(remote_address) = &context.remote_address {
             for ip in &ips {
-                if ip.includes(&remote_address) {
+                if ip.includes(&remote_address.0) {
                     return true;
                 }
             }
@@ -314,7 +314,7 @@ fn _ip_to_vec(ips: &[String]) -> Vec<ipaddress::IPAddress> {
 /// returns true if the strategy should be delegated to, false to disable
 fn _compile_constraint_host<F>(expression: ConstraintExpression, getter: F) -> Evaluate
 where
-    F: Fn(&Context) -> Option<&ipaddress::IPAddress> + Clone + Sync + Send + 'static,
+    F: Fn(&Context) -> Option<&crate::context::IPAddress> + Clone + Sync + Send + 'static,
 {
     match &expression {
         ConstraintExpression::In(values) => {
@@ -323,7 +323,7 @@ where
                 getter(context)
                     .map(|remote_address| {
                         for ip in &ips {
-                            if ip.includes(&remote_address) {
+                            if ip.includes(&remote_address.0) {
                                 return true;
                             }
                         }
@@ -344,7 +344,7 @@ where
                                 return false;
                             }
                             for ip in &ips {
-                                if ip.includes(&remote_address) {
+                                if ip.includes(&remote_address.0) {
                                     return false;
                                 }
                             }
@@ -426,14 +426,13 @@ mod tests {
     use std::collections::hash_map::HashMap;
     use std::default::Default;
 
-    use ipaddress::IPAddress;
     use maplit::hashmap;
 
     use crate::api::{Constraint, ConstraintExpression};
-    use crate::context::Context;
+    use crate::context::{Context, IPAddress};
 
     fn parse_ip(addr: &str) -> Option<IPAddress> {
-        Some(IPAddress::parse(addr).unwrap())
+        Some(IPAddress(ipaddress::IPAddress::parse(addr).unwrap()))
     }
 
     #[test]
@@ -845,22 +844,22 @@ mod tests {
             "IPs".into() => "1.2/8,2.3.4.5,2222:FF:0:1234::/64".into()
         };
         let c: Context = Context {
-            remote_address: Some(IPAddress::parse("1.2.3.4").unwrap()),
+            remote_address: parse_ip("1.2.3.4"),
             ..Default::default()
         };
         assert_eq!(true, super::remote_address(Some(params.clone()))(&c));
         let c: Context = Context {
-            remote_address: Some(IPAddress::parse("2.3.4.5").unwrap()),
+            remote_address: parse_ip("2.3.4.5"),
             ..Default::default()
         };
         assert_eq!(true, super::remote_address(Some(params.clone()))(&c));
         let c: Context = Context {
-            remote_address: Some(IPAddress::parse("2222:FF:0:1234::FDEC").unwrap()),
+            remote_address: parse_ip("2222:FF:0:1234::FDEC"),
             ..Default::default()
         };
         assert_eq!(true, super::remote_address(Some(params.clone()))(&c));
         let c: Context = Context {
-            remote_address: Some(IPAddress::parse("2.3.4.4").unwrap()),
+            remote_address: parse_ip("2.3.4.4"),
             ..Default::default()
         };
         assert_eq!(false, super::remote_address(Some(params))(&c));
