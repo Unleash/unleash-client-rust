@@ -341,7 +341,7 @@ where
                         // Build up a new cached state
                         let mut new_state = CachedState {
                             start: cached_state.start,
-                            features: EnumMap::new(),
+                            features: EnumMap::default(),
                             str_features: HashMap::new(),
                         };
                         fn cloned_feature(feature: &CachedFeature) -> CachedFeature {
@@ -353,7 +353,7 @@ where
                                 strategies: feature.strategies.clone(),
                                 variants: feature.variants.clone(),
                             }
-                        };
+                        }
                         for (key, feature) in &cached_state.features {
                             new_state.features[key] = cloned_feature(&feature);
                         }
@@ -502,7 +502,7 @@ where
                 feature_name
             );
             let mut rng = rand::thread_rng();
-            let picked = rng.gen_range(0, feature.variants.len());
+            let picked = rng.gen_range(0..feature.variants.len());
             return (&feature.variants[picked]).into();
         }
         let identifier = identifier.unwrap();
@@ -577,7 +577,7 @@ where
         trace!("memoize: start with {} features", features.len());
         let source_strategies = self.strategies.lock().unwrap();
         let mut unenumerated_features: HashMap<String, CachedFeature> = HashMap::new();
-        let mut cached_features: EnumMap<F, CachedFeature> = EnumMap::new();
+        let mut cached_features: EnumMap<F, CachedFeature> = EnumMap::default();
         // HashMap<String, Vec<Box<strategy::Evaluate>>> = HashMap::new();
         for feature in features {
             let cached_feature = {

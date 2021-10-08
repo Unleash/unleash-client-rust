@@ -169,7 +169,7 @@ pub fn flexible_rollout<S: BuildHasher>(
                 } else if context.session_id.is_some() {
                     partial_rollout(&group, context.session_id.as_ref(), rollout)
                 } else {
-                    let picked = rand::thread_rng().gen_range(0, 100);
+                    let picked = rand::thread_rng().gen_range(0..100);
                     rollout > picked
                 }
             })
@@ -211,7 +211,7 @@ pub fn _random<S: BuildHasher>(
     }
     Box::new(move |_: &Context| -> bool {
         let mut rng = rand::thread_rng();
-        let picked = rng.gen_range(0, 100);
+        let picked = rng.gen_range(0..100);
         pct > picked
     })
 }
@@ -414,7 +414,7 @@ pub fn constrain<S: Fn(Option<HashMap<String, String>>) -> Evaluate + Sync + Sen
                             return false;
                         }
                     }
-                    compiled_strategy(context)
+                    compiled_strategy(&context)
                 })
             }
         }
