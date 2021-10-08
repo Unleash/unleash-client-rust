@@ -33,7 +33,7 @@ mod tests {
             futures::future::join(client.poll_for_updates(), async {
                 // Ensure we have features
                 Delay::new(Duration::from_millis(500)).await;
-                assert_eq!(true, client.is_enabled("default", None, false));
+                assert!(client.is_enabled("default", None, false));
                 // Ensure the metrics get up-loaded
                 Delay::new(Duration::from_millis(500)).await;
                 client.stop_poll().await;
@@ -73,7 +73,7 @@ mod tests {
 
         // Ensure we have features
         thread::sleep(Duration::from_millis(500));
-        assert_eq!(true, client.is_enabled("default", None, false));
+        assert!(client.is_enabled("default", None, false));
         // Ensure the metrics get up-loaded
         thread::sleep(Duration::from_millis(500));
         task::block_on(async {

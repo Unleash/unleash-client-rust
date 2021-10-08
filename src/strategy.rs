@@ -99,7 +99,7 @@ pub fn partial_rollout(group: &str, variable: Option<&String>, rollout: u32) -> 
     } else {
         return false;
     };
-    if let Ok(normalised) = normalised_hash(group, &variable, 100) {
+    if let Ok(normalised) = normalised_hash(group, variable, 100) {
         rollout > normalised
     } else {
         false
@@ -410,11 +410,11 @@ pub fn constrain<S: Fn(Option<HashMap<String, String>>) -> Evaluate + Sync + Sen
                 Box::new(move |context| {
                     // Check every constraint; if all match, permit
                     for constraint in &constraints {
-                        if !constraint(&context) {
+                        if !constraint(context) {
                             return false;
                         }
                     }
-                    compiled_strategy(&context)
+                    compiled_strategy(context)
                 })
             }
         }
@@ -439,124 +439,99 @@ mod tests {
     fn test_constrain() {
         // Without constraints, things should just pass through
         let context = Context::default();
-        assert_eq!(
-            true,
-            super::constrain(None, &super::default, None)(&context)
-        );
+        assert!(super::constrain(None, &super::default, None)(&context));
 
         // An empty constraint list acts like a missing one
         let context = Context::default();
-        assert_eq!(
-            true,
-            super::constrain(Some(vec![]), &super::default, None)(&context)
-        );
+        assert!(super::constrain(Some(vec![]), &super::default, None)(
+            &context
+        ));
 
         // An empty constraint gets disabled
         let context = Context {
             environment: "development".into(),
             ..Default::default()
         };
-        assert_eq!(
-            false,
-            super::constrain(
-                Some(vec![Constraint {
-                    context_name: "".into(),
-                    expression: ConstraintExpression::In(vec![]),
-                }]),
-                &super::default,
-                None
-            )(&context)
-        );
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "".into(),
+                expression: ConstraintExpression::In(vec![]),
+            }]),
+            &super::default,
+            None
+        )(&context));
 
         // A mismatched constraint acts like an empty constraint
         let context = Context {
             environment: "production".into(),
             ..Default::default()
         };
-        assert_eq!(
-            false,
-            super::constrain(
-                Some(vec![Constraint {
-                    context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec!["development".into()]),
-                }]),
-                &super::default,
-                None
-            )(&context)
-        );
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                expression: ConstraintExpression::In(vec!["development".into()]),
+            }]),
+            &super::default,
+            None
+        )(&context));
 
         // a matched Not In acts like an empty constraint
         let context = Context {
             environment: "development".into(),
             ..Default::default()
         };
-        assert_eq!(
-            false,
-            super::constrain(
-                Some(vec![Constraint {
-                    context_name: "environment".into(),
-                    expression: ConstraintExpression::NotIn(vec!["development".into()]),
-                }]),
-                &super::default,
-                None
-            )(&context)
-        );
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                expression: ConstraintExpression::NotIn(vec!["development".into()]),
+            }]),
+            &super::default,
+            None
+        )(&context));
 
         // a matched In in either first or second (etc) places delegates
         let context = Context {
             environment: "development".into(),
             ..Default::default()
         };
-        assert_eq!(
-            true,
-            super::constrain(
-                Some(vec![Constraint {
-                    context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec!["development".into()]),
-                }]),
-                &super::default,
-                None
-            )(&context)
-        );
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                expression: ConstraintExpression::In(vec!["development".into()]),
+            }]),
+            &super::default,
+            None
+        )(&context));
         // second place
         let context = Context {
             environment: "development".into(),
             ..Default::default()
         };
-        assert_eq!(
-            true,
-            super::constrain(
-                Some(vec![Constraint {
-                    context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec![
-                        "staging".into(),
-                        "development".into()
-                    ]),
-                }]),
-                &super::default,
-                None
-            )(&context)
-        );
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                expression: ConstraintExpression::In(vec!["staging".into(), "development".into()]),
+            }]),
+            &super::default,
+            None
+        )(&context));
 
         // a not matched Not In across 1st and second etc delegates
         let context = Context {
             environment: "production".into(),
             ..Default::default()
         };
-        assert_eq!(
-            true,
-            super::constrain(
-                Some(vec![Constraint {
-                    context_name: "environment".into(),
-                    expression: ConstraintExpression::NotIn(vec![
-                        "staging".into(),
-                        "development".into()
-                    ]),
-                }]),
-                &super::default,
-                None
-            )(&context)
-        );
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                expression: ConstraintExpression::NotIn(vec![
+                    "staging".into(),
+                    "development".into()
+                ]),
+            }]),
+            &super::default,
+            None
+        )(&context));
 
         // Context keys can be chosen by the context_name field:
         // .environment is used above.
@@ -565,66 +540,54 @@ mod tests {
             user_id: Some("fred".into()),
             ..Default::default()
         };
-        assert_eq!(
-            true,
-            super::constrain(
-                Some(vec![Constraint {
-                    context_name: "userId".into(),
-                    expression: ConstraintExpression::In(vec!["fred".into()]),
-                }]),
-                &super::default,
-                None
-            )(&context)
-        );
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "userId".into(),
+                expression: ConstraintExpression::In(vec!["fred".into()]),
+            }]),
+            &super::default,
+            None
+        )(&context));
 
         // .session_id
         let context = Context {
             session_id: Some("qwerty".into()),
             ..Default::default()
         };
-        assert_eq!(
-            true,
-            super::constrain(
-                Some(vec![Constraint {
-                    context_name: "sessionId".into(),
-                    expression: ConstraintExpression::In(vec!["qwerty".into()]),
-                }]),
-                &super::default,
-                None
-            )(&context)
-        );
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "sessionId".into(),
+                expression: ConstraintExpression::In(vec!["qwerty".into()]),
+            }]),
+            &super::default,
+            None
+        )(&context));
 
         // .remote_address
         let context = Context {
             remote_address: parse_ip("10.20.30.40"),
             ..Default::default()
         };
-        assert_eq!(
-            true,
-            super::constrain(
-                Some(vec![Constraint {
-                    context_name: "remoteAddress".into(),
-                    expression: ConstraintExpression::In(vec!["10.0.0.0/8".into()]),
-                }]),
-                &super::default,
-                None
-            )(&context)
-        );
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "remoteAddress".into(),
+                expression: ConstraintExpression::In(vec!["10.0.0.0/8".into()]),
+            }]),
+            &super::default,
+            None
+        )(&context));
         let context = Context {
             remote_address: parse_ip("1.2.3.4"),
             ..Default::default()
         };
-        assert_eq!(
-            true,
-            super::constrain(
-                Some(vec![Constraint {
-                    context_name: "remoteAddress".into(),
-                    expression: ConstraintExpression::NotIn(vec!["10.0.0.0/8".into()]),
-                }]),
-                &super::default,
-                None
-            )(&context)
-        );
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "remoteAddress".into(),
+                expression: ConstraintExpression::NotIn(vec!["10.0.0.0/8".into()]),
+            }]),
+            &super::default,
+            None
+        )(&context));
 
         // multiple constraints are ANDed together
         let context = Context {
@@ -632,40 +595,34 @@ mod tests {
             ..Default::default()
         };
         // true ^ true => true
-        assert_eq!(
-            true,
-            super::constrain(
-                Some(vec![
-                    Constraint {
-                        context_name: "environment".into(),
-                        expression: ConstraintExpression::In(vec!["development".into()]),
-                    },
-                    Constraint {
-                        context_name: "environment".into(),
-                        expression: ConstraintExpression::In(vec!["development".into()]),
-                    },
-                ]),
-                &super::default,
-                None
-            )(&context)
-        );
-        assert_eq!(
-            false,
-            super::constrain(
-                Some(vec![
-                    Constraint {
-                        context_name: "environment".into(),
-                        expression: ConstraintExpression::In(vec!["development".into()]),
-                    },
-                    Constraint {
-                        context_name: "environment".into(),
-                        expression: ConstraintExpression::In(vec![]),
-                    }
-                ]),
-                &super::default,
-                None
-            )(&context)
-        );
+        assert!(super::constrain(
+            Some(vec![
+                Constraint {
+                    context_name: "environment".into(),
+                    expression: ConstraintExpression::In(vec!["development".into()]),
+                },
+                Constraint {
+                    context_name: "environment".into(),
+                    expression: ConstraintExpression::In(vec!["development".into()]),
+                },
+            ]),
+            &super::default,
+            None
+        )(&context));
+        assert!(!super::constrain(
+            Some(vec![
+                Constraint {
+                    context_name: "environment".into(),
+                    expression: ConstraintExpression::In(vec!["development".into()]),
+                },
+                Constraint {
+                    context_name: "environment".into(),
+                    expression: ConstraintExpression::In(vec![]),
+                }
+            ]),
+            &super::default,
+            None
+        )(&context));
     }
 
     #[test]
@@ -673,27 +630,18 @@ mod tests {
         let params: HashMap<String, String> = hashmap! {
             "userIds".into() => "fred,barney".into(),
         };
-        assert_eq!(
-            true,
-            super::user_with_id(Some(params.clone()))(&Context {
-                user_id: Some("fred".into()),
-                ..Default::default()
-            })
-        );
-        assert_eq!(
-            true,
-            super::user_with_id(Some(params.clone()))(&Context {
-                user_id: Some("barney".into()),
-                ..Default::default()
-            })
-        );
-        assert_eq!(
-            false,
-            super::user_with_id(Some(params))(&Context {
-                user_id: Some("betty".into()),
-                ..Default::default()
-            })
-        );
+        assert!(super::user_with_id(Some(params.clone()))(&Context {
+            user_id: Some("fred".into()),
+            ..Default::default()
+        }));
+        assert!(super::user_with_id(Some(params.clone()))(&Context {
+            user_id: Some("barney".into()),
+            ..Default::default()
+        }));
+        assert!(!super::user_with_id(Some(params))(&Context {
+            user_id: Some("betty".into()),
+            ..Default::default()
+        }));
     }
 
     #[test]
@@ -704,14 +652,14 @@ mod tests {
             "rollout".into() => "0".into(),
         };
         let c: Context = Default::default();
-        assert_eq!(false, super::flexible_rollout(Some(params))(&c));
+        assert!(!super::flexible_rollout(Some(params))(&c));
 
         let params: HashMap<String, String> = hashmap! {
             "stickiness".into() => "random".into(),
             "rollout".into() => "100".into(),
         };
         let c: Context = Default::default();
-        assert_eq!(true, super::flexible_rollout(Some(params))(&c));
+        assert!(super::flexible_rollout(Some(params))(&c));
 
         // Could parameterise this by SESSION and USER, but its barely long
         // enough to bother and the explicitness in failures has merit.
@@ -725,7 +673,7 @@ mod tests {
             session_id: Some("session1".into()),
             ..Default::default()
         };
-        assert_eq!(false, super::flexible_rollout(Some(params))(&c));
+        assert!(!super::flexible_rollout(Some(params))(&c));
         let params: HashMap<String, String> = hashmap! {
             "stickiness".into() => "sessionId".into(),
             "groupId".into() => "group1".into(),
@@ -735,7 +683,7 @@ mod tests {
             session_id: Some("session1".into()),
             ..Default::default()
         };
-        assert_eq!(true, super::flexible_rollout(Some(params))(&c));
+        assert!(super::flexible_rollout(Some(params))(&c));
         // Check rollout works
         let params: HashMap<String, String> = hashmap! {
             "stickiness".into() => "sessionId".into(),
@@ -746,12 +694,12 @@ mod tests {
             session_id: Some("session1".into()),
             ..Default::default()
         };
-        assert_eq!(true, super::flexible_rollout(Some(params.clone()))(&c));
+        assert!(super::flexible_rollout(Some(params.clone()))(&c));
         let c: Context = Context {
             session_id: Some("session2".into()),
             ..Default::default()
         };
-        assert_eq!(false, super::flexible_rollout(Some(params))(&c));
+        assert!(!super::flexible_rollout(Some(params))(&c));
         // Check groupId modifies the hash order
         let params: HashMap<String, String> = hashmap! {
             "stickiness".into() => "sessionId".into(),
@@ -762,12 +710,12 @@ mod tests {
             session_id: Some("session1".into()),
             ..Default::default()
         };
-        assert_eq!(false, super::flexible_rollout(Some(params.clone()))(&c));
+        assert!(!super::flexible_rollout(Some(params.clone()))(&c));
         let c: Context = Context {
             session_id: Some("session2".into()),
             ..Default::default()
         };
-        assert_eq!(true, super::flexible_rollout(Some(params))(&c));
+        assert!(super::flexible_rollout(Some(params))(&c));
 
         // userId
         let params: HashMap<String, String> = hashmap! {
@@ -779,7 +727,7 @@ mod tests {
             user_id: Some("user1".into()),
             ..Default::default()
         };
-        assert_eq!(false, super::flexible_rollout(Some(params))(&c));
+        assert!(!super::flexible_rollout(Some(params))(&c));
         let params: HashMap<String, String> = hashmap! {
             "stickiness".into() => "userId".into(),
             "groupId".into() => "group1".into(),
@@ -789,7 +737,7 @@ mod tests {
             user_id: Some("user1".into()),
             ..Default::default()
         };
-        assert_eq!(true, super::flexible_rollout(Some(params))(&c));
+        assert!(super::flexible_rollout(Some(params))(&c));
         // Check rollout works
         let params: HashMap<String, String> = hashmap! {
             "stickiness".into() => "userId".into(),
@@ -800,12 +748,12 @@ mod tests {
             user_id: Some("user1".into()),
             ..Default::default()
         };
-        assert_eq!(true, super::flexible_rollout(Some(params.clone()))(&c));
+        assert!(super::flexible_rollout(Some(params.clone()))(&c));
         let c: Context = Context {
             user_id: Some("user3".into()),
             ..Default::default()
         };
-        assert_eq!(false, super::flexible_rollout(Some(params))(&c));
+        assert!(!super::flexible_rollout(Some(params))(&c));
         // Check groupId modifies the hash order
         let params: HashMap<String, String> = hashmap! {
             "stickiness".into() => "userId".into(),
@@ -816,12 +764,12 @@ mod tests {
             user_id: Some("user3".into()),
             ..Default::default()
         };
-        assert_eq!(false, super::flexible_rollout(Some(params.clone()))(&c));
+        assert!(!super::flexible_rollout(Some(params.clone()))(&c));
         let c: Context = Context {
             user_id: Some("user1".into()),
             ..Default::default()
         };
-        assert_eq!(true, super::flexible_rollout(Some(params))(&c));
+        assert!(super::flexible_rollout(Some(params))(&c));
     }
 
     #[test]
@@ -830,12 +778,12 @@ mod tests {
             "percentage".into() => "0".into()
         };
         let c: Context = Default::default();
-        assert_eq!(false, super::random(Some(params))(&c));
+        assert!(!super::random(Some(params))(&c));
         let params: HashMap<String, String> = hashmap! {
             "percentage".into() => "100".into()
         };
         let c: Context = Default::default();
-        assert_eq!(true, super::random(Some(params))(&c));
+        assert!(super::random(Some(params))(&c));
     }
 
     #[test]
@@ -847,22 +795,22 @@ mod tests {
             remote_address: parse_ip("1.2.3.4"),
             ..Default::default()
         };
-        assert_eq!(true, super::remote_address(Some(params.clone()))(&c));
+        assert!(super::remote_address(Some(params.clone()))(&c));
         let c: Context = Context {
             remote_address: parse_ip("2.3.4.5"),
             ..Default::default()
         };
-        assert_eq!(true, super::remote_address(Some(params.clone()))(&c));
+        assert!(super::remote_address(Some(params.clone()))(&c));
         let c: Context = Context {
             remote_address: parse_ip("2222:FF:0:1234::FDEC"),
             ..Default::default()
         };
-        assert_eq!(true, super::remote_address(Some(params.clone()))(&c));
+        assert!(super::remote_address(Some(params.clone()))(&c));
         let c: Context = Context {
             remote_address: parse_ip("2.3.4.4"),
             ..Default::default()
         };
-        assert_eq!(false, super::remote_address(Some(params))(&c));
+        assert!(!super::remote_address(Some(params))(&c));
     }
 
     #[test]
@@ -872,11 +820,11 @@ mod tests {
         let params: HashMap<String, String> = hashmap! {
             "hostNames".into() => format!("foo,{},bar", this_hostname)
         };
-        assert_eq!(true, super::hostname(Some(params))(&c));
+        assert!(super::hostname(Some(params))(&c));
         let params: HashMap<String, String> = hashmap! {
             "hostNames".into() => "foo,bar".into()
         };
-        assert_eq!(false, super::hostname(Some(params))(&c));
+        assert!(!super::hostname(Some(params))(&c));
     }
 
     #[test]
