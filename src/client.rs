@@ -355,12 +355,12 @@ where
                             }
                         }
                         for (key, feature) in &cached_state.features {
-                            new_state.features[key] = cloned_feature(&feature);
+                            new_state.features[key] = cloned_feature(feature);
                         }
                         for (name, feature) in &cached_state.str_features {
                             new_state
                                 .str_features
-                                .insert(name.clone(), cloned_feature(&feature));
+                                .insert(name.clone(), cloned_feature(feature));
                         }
                         let stub_feature = CachedFeature {
                             disabled: AtomicU64::new(if default { 0 } else { 1 }),
@@ -507,7 +507,7 @@ where
         }
         let identifier = identifier.unwrap();
         let total_weight = feature.variants.iter().map(|v| v.weight as u32).sum();
-        strategy::normalised_hash(&group, &identifier, total_weight)
+        strategy::normalised_hash(&group, identifier, total_weight)
             .map(|selected_weight| {
                 let mut counter: u32 = 0;
                 for variant in feature.variants.iter().as_ref() {
@@ -925,29 +925,20 @@ mod tests {
             ..Default::default()
         };
         // features unknown on the server should honour the default
-        assert_eq!(false, c.is_enabled(UserFeatures::unknown, None, false));
-        assert_eq!(true, c.is_enabled(UserFeatures::unknown, None, true));
+        assert!(!c.is_enabled(UserFeatures::unknown, None, false));
+        assert!(c.is_enabled(UserFeatures::unknown, None, true));
         // default should be enabled, no context needed
-        assert_eq!(true, c.is_enabled(UserFeatures::default, None, false));
+        assert!(c.is_enabled(UserFeatures::default, None, false));
         // user present should be present on userWithId
-        assert_eq!(
-            true,
-            c.is_enabled(UserFeatures::userWithId, Some(&present), false)
-        );
+        assert!(c.is_enabled(UserFeatures::userWithId, Some(&present), false));
         // user missing should not
-        assert_eq!(
-            false,
-            c.is_enabled(UserFeatures::userWithId, Some(&missing), false)
-        );
+        assert!(!c.is_enabled(UserFeatures::userWithId, Some(&missing), false));
         // user missing should be present on userWithId+default
-        assert_eq!(
-            true,
-            c.is_enabled(UserFeatures::userWithId_Default, Some(&missing), false)
-        );
+        assert!(c.is_enabled(UserFeatures::userWithId_Default, Some(&missing), false));
         // disabled should be disabled
-        assert_eq!(false, c.is_enabled(UserFeatures::disabled, None, true));
+        assert!(!c.is_enabled(UserFeatures::disabled, None, true));
         // no strategies should result in enabled features.
-        assert_eq!(true, c.is_enabled(UserFeatures::nostrategies, None, false));
+        assert!(c.is_enabled(UserFeatures::nostrategies, None, false));
     }
 
     #[test]
@@ -976,23 +967,20 @@ mod tests {
             ..Default::default()
         };
         // features unknown on the server should honour the default
-        assert_eq!(false, c.is_enabled_str("unknown", None, false));
-        assert_eq!(true, c.is_enabled_str("unknown", None, true));
+        assert!(!c.is_enabled_str("unknown", None, false));
+        assert!(c.is_enabled_str("unknown", None, true));
         // default should be enabled, no context needed
-        assert_eq!(true, c.is_enabled_str("default", None, false));
+        assert!(c.is_enabled_str("default", None, false));
         // user present should be present on userWithId
-        assert_eq!(true, c.is_enabled_str("userWithId", Some(&present), false));
+        assert!(c.is_enabled_str("userWithId", Some(&present), false));
         // user missing should not
-        assert_eq!(false, c.is_enabled_str("userWithId", Some(&missing), false));
+        assert!(!c.is_enabled_str("userWithId", Some(&missing), false));
         // user missing should be present on userWithId+default
-        assert_eq!(
-            true,
-            c.is_enabled_str("userWithId+default", Some(&missing), false)
-        );
+        assert!(c.is_enabled_str("userWithId+default", Some(&missing), false));
         // disabled should be disabled
-        assert_eq!(false, c.is_enabled_str("disabled", None, true));
+        assert!(!c.is_enabled_str("disabled", None, true));
         // no strategies should result in enabled features.
-        assert_eq!(true, c.is_enabled_str("nostrategies", None, false));
+        assert!(c.is_enabled_str("nostrategies", None, false));
     }
 
     fn _reversed_uids<S: BuildHasher>(
@@ -1071,18 +1059,12 @@ mod tests {
             ..Default::default()
         };
         // user cba should be present on reversed
-        assert_eq!(
-            true,
-            client.is_enabled(UserFeatures::reversed, Some(&present), false)
-        );
+        assert!(client.is_enabled(UserFeatures::reversed, Some(&present), false));
         // user abc should not
-        assert_eq!(
-            false,
-            client.is_enabled(UserFeatures::reversed, Some(&missing), false)
-        );
+        assert!(!client.is_enabled(UserFeatures::reversed, Some(&missing), false));
         // adding custom strategies shouldn't disable built-in ones
         // default should be enabled, no context needed
-        assert_eq!(true, client.is_enabled(UserFeatures::default, None, false));
+        assert!(client.is_enabled(UserFeatures::default, None, false));
     }
 
     fn variant_features() -> Features {

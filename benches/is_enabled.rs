@@ -172,7 +172,7 @@ fn client(count: usize) -> client::Client<UserFeatures> {
             enabled: true,
             created_at: None,
             variants: None,
-            name: name,
+            name,
             strategies: vec![Strategy {
                 name: "flexibleRollout".into(),
                 parameters: Some(hashmap!["stickiness".into()=>"default".into(),
@@ -186,7 +186,7 @@ fn client(count: usize) -> client::Client<UserFeatures> {
             enabled: true,
             created_at: None,
             variants: None,
-            name: name,
+            name,
             strategies: vec![Strategy {
                 name: "flexibleRollout".into(),
                 parameters: Some(hashmap!["stickiness".into()=>"default".into(),
@@ -285,14 +285,14 @@ fn batch(c: &mut Criterion) {
             let mut threads = vec![];
             for _cpu in 0..cpus {
                 let thread_client = client.clone();
-                let feature = format!("flexible0");
+                let feature = "flexible0";
                 let handle = thread::spawn(move || {
                     let context = Context {
                         user_id: Some(random_str()),
                         ..Default::default()
                     };
                     for _ in 0..iterations {
-                        thread_client.is_enabled_str(&feature, Some(&context), false);
+                        thread_client.is_enabled_str(feature, Some(&context), false);
                     }
                 });
                 threads.push(handle);
