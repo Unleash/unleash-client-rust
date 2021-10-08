@@ -203,6 +203,15 @@ fn client(count: usize) -> client::Client<UserFeatures> {
     client
 }
 
+#[inline]
+fn random_str() -> String {
+    thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(30)
+        .map(char::from)
+        .collect()
+}
+
 fn batch(c: &mut Criterion) {
     let _ = simple_logger::SimpleLogger::new()
         .with_module_level("isahc::agent", log::LevelFilter::Off)
@@ -226,7 +235,7 @@ fn batch(c: &mut Criterion) {
         b.iter(|| {
             // Context creation is in here to make this comparable to parallel_same above.
             let context = Context {
-                user_id: Some(thread_rng().sample_iter(&Alphanumeric).take(30).collect()),
+                user_id: Some(random_str()),
                 ..Default::default()
             };
             for _ in 0..iterations {
@@ -238,7 +247,7 @@ fn batch(c: &mut Criterion) {
         b.iter(|| {
             // Context creation is in here to make this comparable to parallel_same above.
             let context = Context {
-                user_id: Some(thread_rng().sample_iter(&Alphanumeric).take(30).collect()),
+                user_id: Some(random_str()),
                 ..Default::default()
             };
             for _ in 0..iterations {
@@ -257,7 +266,7 @@ fn batch(c: &mut Criterion) {
                 let feature = UserFeatures::Flexible0;
                 let handle = thread::spawn(move || {
                     let context = Context {
-                        user_id: Some(thread_rng().sample_iter(&Alphanumeric).take(30).collect()),
+                        user_id: Some(random_str()),
                         ..Default::default()
                     };
                     for _ in 0..iterations {
@@ -279,7 +288,7 @@ fn batch(c: &mut Criterion) {
                 let feature = format!("flexible0");
                 let handle = thread::spawn(move || {
                     let context = Context {
-                        user_id: Some(thread_rng().sample_iter(&Alphanumeric).take(30).collect()),
+                        user_id: Some(random_str()),
                         ..Default::default()
                     };
                     for _ in 0..iterations {
@@ -303,7 +312,7 @@ fn batch(c: &mut Criterion) {
                 let feature = serde_plain::from_str::<UserFeatures>(&feature_str).unwrap();
                 let handle = thread::spawn(move || {
                     let context = Context {
-                        user_id: Some(thread_rng().sample_iter(&Alphanumeric).take(30).collect()),
+                        user_id: Some(random_str()),
                         ..Default::default()
                     };
                     for _ in 0..iterations {
@@ -325,7 +334,7 @@ fn batch(c: &mut Criterion) {
                 let feature_str = format!("flexible{}", cpu);
                 let handle = thread::spawn(move || {
                     let context = Context {
-                        user_id: Some(thread_rng().sample_iter(&Alphanumeric).take(30).collect()),
+                        user_id: Some(random_str()),
                         ..Default::default()
                     };
                     for _ in 0..iterations {
@@ -348,7 +357,7 @@ fn batch(c: &mut Criterion) {
                 let feature = serde_plain::from_str::<UserFeatures>(&feature_str).unwrap();
                 let handle = thread::spawn(move || {
                     let context = Context {
-                        user_id: Some(thread_rng().sample_iter(&Alphanumeric).take(30).collect()),
+                        user_id: Some(random_str()),
                         ..Default::default()
                     };
                     for _ in 0..iterations {
@@ -370,7 +379,7 @@ fn batch(c: &mut Criterion) {
                 let feature_str = format!("unknown{}", cpu);
                 let handle = thread::spawn(move || {
                     let context = Context {
-                        user_id: Some(thread_rng().sample_iter(&Alphanumeric).take(30).collect()),
+                        user_id: Some(random_str()),
                         ..Default::default()
                     };
                     for _ in 0..iterations {
@@ -396,7 +405,7 @@ fn single_call(c: &mut Criterion) {
         .init();
     let client = client(1);
     let context = Context {
-        user_id: Some(thread_rng().sample_iter(&Alphanumeric).take(30).collect()),
+        user_id: Some(random_str()),
         ..Default::default()
     };
     let mut group = c.benchmark_group("single_call");

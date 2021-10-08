@@ -25,40 +25,40 @@ name = "dump-features"
 path = "src/bin/dump-features.rs"
 
 [dependencies]
-anyhow = "1.0.28"
-arc-swap = "0.4.6"
-async-std = "1.6.0"
-enum-map = "0.6.2"
-futures = "0.3.4"
+anyhow = "1.0.44"
+arc-swap = "1.4.0"
+async-std = "1.10.0"
+enum-map = "1.1.1"
+futures = "0.3.17"
 futures-timer = "3.0.2"
 hostname = "0.3.1"
-http-client = "6.0.0"
-http-types = "2.5.0"
+http-client = "6.5.1"
+http-types = "2.12.0"
 ipaddress = "0.1.2"
-log = "0.4.8"
+log = "0.4.14"
 maplit = "1.0.2"
 murmur3 = "0.5.1"
-rand = "0.7.3"
-serde_json = "1.0.52"
-serde_plain = "0.3"
-surf = "2.0.0-alpha.7"
+rand = "0.8.4"
+serde_json = "1.0.68"
+serde_plain = "1.0.0"
+surf = "2.3.1"
 
 [dependencies.chrono]
 features = ["serde"]
-version = "0.4.11"
+version = "0.4.19"
 
 [dependencies.serde]
 features = ["derive"]
 version = "1.0"
 
 [dev-dependencies]
-criterion = "0.3.2"
+criterion = "0.3.5"
 num_cpus = "1.13.0"
-simple_logger = "1.9.0"
+simple_logger = "1.13.0"
 
 [dev-dependencies.tokio]
-features = ["rt-threaded", "macros"]
-version = "0.2.20"
+features = ["rt-multi-thread", "macros"]
+version = "1.12.0"
 
 [features]
 functional = []
