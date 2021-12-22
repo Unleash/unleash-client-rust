@@ -43,4 +43,6 @@ docker-compose up -d
 UNLEASH_API_URL=http://127.0.0.1:4242/api UNLEASH_APP_NAME=fred UNLEASH_INSTANCE_ID=test cargo test --features functional  -- --nocapture
 ```
 
-or similar.
+or similar. The functional test suite looks for a manually setup set of
+features. E.g. log into the Unleash UI on port 4242 and create a feature called
+`default`.
