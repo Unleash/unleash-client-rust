@@ -20,7 +20,7 @@ pub struct EnvironmentConfig {
 impl EnvironmentConfig {
     /// Retrieve a configuration from environment variables.alloc
     ///
-    /// UNLEASH_API_URL: http://host.example.com:1234/api
+    /// UNLEASH_API_URL: <http://host.example.com:1234/api>
     /// UNLEASH_APP_NAME: example-app
     /// UNLEASH_INSTANCE_NAME: instance-512
     /// UNLEASH_CLIENT_SECRET: unset | some-secret-value

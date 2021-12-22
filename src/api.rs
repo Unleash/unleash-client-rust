@@ -1,5 +1,5 @@
 // Copyright 2020 Cognite AS
-//! https://unleash.github.io/docs/api/client/features
+//! <https://docs.getunleash.io/api/client/features>
 use std::collections::HashMap;
 use std::default::Default;
 

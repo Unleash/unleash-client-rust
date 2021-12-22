@@ -1,5 +1,5 @@
 // Copyright 2020 Cognite AS
-//! https://unleash.github.io/docs/activation_strategy
+//! <https://docs.getunleash.io/user_guide/activation_strategy>
 use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
 use std::hash::BuildHasher;
@@ -36,12 +36,12 @@ impl Clone for Box<dyn Evaluator + Send + Sync + 'static> {
     }
 }
 
-/// https://unleash.github.io/docs/activation_strategy#default
+/// <https://docs.getunleash.io/user_guide/activation_strategy#standard>
 pub fn default<S: BuildHasher>(_: Option<HashMap<String, String, S>>) -> Evaluate {
     Box::new(|_: &Context| -> bool { true })
 }
 
-/// https://unleash.github.io/docs/activation_strategy#userwithid
+/// <https://docs.getunleash.io/user_guide/activation_strategy#userids>
 /// userIds: user,ids,to,match
 pub fn user_with_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     let mut uids: HashSet<String> = HashSet::new();
@@ -143,7 +143,7 @@ fn _user_id<S: BuildHasher>(
     })
 }
 
-/// https://unleash.github.io/docs/activation_strategy#flexiblerollout
+/// <https://docs.getunleash.io/user_guide/activation_strategy#gradual-rollout>
 /// stickiness: [default|userId|sessionId|random]
 /// groupId: hash key
 /// rollout: percentage
@@ -181,14 +181,14 @@ pub fn flexible_rollout<S: BuildHasher>(
     }
 }
 
-/// https://unleash.github.io/docs/activation_strategy#gradualrolloutuserid
+/// <https://docs.getunleash.io/user_guide/activation_strategy#gradualrolloutuserid-deprecated-from-v4---use-gradual-rollout-instead>
 /// percentage: 0-100
 /// groupId: hash key
 pub fn user_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     _user_id(parameters, "percentage")
 }
 
-/// https://unleash.github.io/docs/activation_strategy#gradualrolloutsessionid
+/// <https://docs.getunleash.io/user_guide/activation_strategy#gradualrolloutsessionid-deprecated-from-v4---use-gradual-rollout-instead>
 /// percentage: 0-100
 /// groupId: hash key
 pub fn session_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
@@ -216,13 +216,13 @@ pub fn _random<S: BuildHasher>(
     })
 }
 
-/// https://unleash.github.io/docs/activation_strategy#gradualrolloutrandom
+/// <https://docs.getunleash.io/user_guide/activation_strategy#gradualrolloutrandom-deprecated-from-v4---use-gradual-rollout-instead>
 /// percentage: percentage 0-100
 pub fn random<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     _random(parameters, "percentage")
 }
 
-/// https://unleash.github.io/docs/activation_strategy#remoteaddress
+/// <https://docs.getunleash.io/user_guide/activation_strategy#ips>
 /// IPs: 1.2.3.4,AB::CD::::EF,1.2/8
 pub fn remote_address<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     // TODO: this could be optimised given the inherent radix structure, but its
@@ -251,7 +251,7 @@ pub fn remote_address<S: BuildHasher>(parameters: Option<HashMap<String, String,
     })
 }
 
-/// https://unleash.github.io/docs/activation_strategy#applicationhostname
+/// <https://docs.getunleash.io/user_guide/activation_strategy#hostnames>
 /// hostNames: names,of,hosts
 pub fn hostname<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     let mut result = false;
