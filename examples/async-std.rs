@@ -8,12 +8,12 @@
 use std::time::Duration;
 
 use async_std::task;
-use enum_map::Enum;
 use futures_timer::Delay;
 use serde::{Deserialize, Serialize};
 
 use unleash_api_client::client;
 use unleash_api_client::config::EnvironmentConfig;
+use unleash_api_client::Enum;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Deserialize, Serialize, Enum, Clone)]

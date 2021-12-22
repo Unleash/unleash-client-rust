@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use arc_swap::ArcSwapOption;
 use chrono::Utc;
-use enum_map::{Enum, EnumMap};
+use enum_map::EnumMap;
 use futures_timer::Delay;
 use log::{debug, trace, warn};
 use rand::Rng;
@@ -20,6 +20,7 @@ use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration};
 use crate::context::Context;
 use crate::http::HTTP;
 use crate::strategy;
+use crate::Enum;
 
 // ----------------- Variant
 
@@ -814,7 +815,6 @@ mod tests {
     use std::default::Default;
     use std::hash::BuildHasher;
 
-    use enum_map::Enum;
     use maplit::hashmap;
     use serde::{Deserialize, Serialize};
 
@@ -822,6 +822,7 @@ mod tests {
     use crate::api::{self, Feature, Features, Strategy};
     use crate::context::{Context, IPAddress};
     use crate::strategy;
+    use crate::Enum;
 
     fn features() -> Features {
         Features {

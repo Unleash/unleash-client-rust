@@ -24,7 +24,6 @@
 //! use std::time::Duration;
 //!
 //! use async_std::task;
-//! use enum_map::Enum;
 //! use futures_timer::Delay;
 //! use serde::{Deserialize, Serialize};
 //!
@@ -32,6 +31,7 @@
 //! use unleash_api_client::config::EnvironmentConfig;
 //! use unleash_api_client::context::Context;
 //! use unleash_api_client::strategy;
+//! use unleash_api_client::Enum;
 //!
 //! fn _reversed_uids<S: BuildHasher>(
 //!     parameters: Option<HashMap<String, String, S>>,
@@ -92,6 +92,9 @@ pub mod context;
 pub mod http;
 pub mod strategy;
 
+/// Re-export of enum_map::Enum - this trait is part of our public API.
+pub use enum_map::Enum;
+
 // Exports for ergonomical use
 pub use crate::client::{Client, ClientBuilder};
 pub use crate::config::EnvironmentConfig;
@@ -101,7 +104,6 @@ pub use crate::strategy::Evaluate;
 /// For the complete minimalist
 ///
 /// ```no_run
-/// use enum_map::Enum;
 /// use serde::{Deserialize, Serialize};
 /// use unleash_api_client::prelude::*;
 /// let config = EnvironmentConfig::from_env()?;
@@ -124,4 +126,5 @@ pub use crate::strategy::Evaluate;
 pub mod prelude {
     pub use crate::client::ClientBuilder;
     pub use crate::config::EnvironmentConfig;
+    pub use crate::Enum;
 }

@@ -6,10 +6,9 @@ mod tests {
     use std::env;
     use std::fs;
 
-    use enum_map::Enum;
     use serde::{Deserialize, Serialize};
 
-    use unleash_api_client::{api, client, context};
+    use unleash_api_client::{api, client, context, Enum};
 
     #[derive(Debug, Deserialize)]
     struct Test {
