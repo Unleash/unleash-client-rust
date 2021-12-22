@@ -895,6 +895,7 @@ mod tests {
     #[test]
     fn test_memoization_enum() {
         let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
             .with_module_level("isahc::agent", log::LevelFilter::Off)
             .with_module_level("tracing::span", log::LevelFilter::Off)
             .with_module_level("tracing::span::active", log::LevelFilter::Off)
@@ -945,6 +946,7 @@ mod tests {
     #[test]
     fn test_memoization_strs() {
         let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
             .with_module_level("isahc::agent", log::LevelFilter::Off)
             .with_module_level("tracing::span", log::LevelFilter::Off)
             .with_module_level("tracing::span::active", log::LevelFilter::Off)
@@ -1007,6 +1009,7 @@ mod tests {
     #[test]
     fn test_custom_strategy() {
         let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
             .with_module_level("isahc::agent", log::LevelFilter::Off)
             .with_module_level("tracing::span", log::LevelFilter::Off)
             .with_module_level("tracing::span::active", log::LevelFilter::Off)
@@ -1146,6 +1149,7 @@ mod tests {
     #[test]
     fn variants_enum() {
         let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
             .with_module_level("isahc::agent", log::LevelFilter::Off)
             .with_module_level("tracing::span", log::LevelFilter::Off)
             .with_module_level("tracing::span::active", log::LevelFilter::Off)
@@ -1233,6 +1237,7 @@ mod tests {
     #[test]
     fn variants_str() {
         let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
             .with_module_level("isahc::agent", log::LevelFilter::Off)
             .with_module_level("tracing::span", log::LevelFilter::Off)
             .with_module_level("tracing::span::active", log::LevelFilter::Off)

@@ -214,6 +214,7 @@ fn random_str() -> String {
 
 fn batch(c: &mut Criterion) {
     let _ = simple_logger::SimpleLogger::new()
+        .with_utc_timestamps()
         .with_module_level("isahc::agent", log::LevelFilter::Off)
         .with_module_level("tracing::span", log::LevelFilter::Off)
         .with_module_level("tracing::span::active", log::LevelFilter::Off)
@@ -398,6 +399,7 @@ fn batch(c: &mut Criterion) {
 
 fn single_call(c: &mut Criterion) {
     let _ = simple_logger::SimpleLogger::new()
+        .with_utc_timestamps()
         .with_module_level("isahc::agent", log::LevelFilter::Off)
         .with_module_level("tracing::span", log::LevelFilter::Off)
         .with_module_level("tracing::span::active", log::LevelFilter::Off)

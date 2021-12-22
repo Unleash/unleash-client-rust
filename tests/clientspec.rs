@@ -72,6 +72,7 @@ mod tests {
     fn test_client_specification() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
     {
         let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
             .with_module_level("isahc::agent", log::LevelFilter::Off)
             .with_module_level("tracing::span", log::LevelFilter::Off)
             .with_module_level("tracing::span::active", log::LevelFilter::Off)

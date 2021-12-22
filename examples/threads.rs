@@ -23,7 +23,9 @@ enum UserFeatures {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let _ = simple_logger::SimpleLogger::new().init();
+    let _ = simple_logger::SimpleLogger::new()
+        .with_utc_timestamps()
+        .init();
     let config = EnvironmentConfig::from_env()?;
     let client = Arc::new(
         client::ClientBuilder::default()
