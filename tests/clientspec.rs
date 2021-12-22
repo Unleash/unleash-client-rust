@@ -25,13 +25,16 @@ mod tests {
     struct Payload {
         #[serde(rename = "type")]
         _type: String,
-        value: String,
+        #[serde(rename = "value")]
+        _value: String,
     }
 
     #[derive(Debug, Deserialize)]
     struct VariantResult {
-        name: String,
-        payload: Option<Payload>,
+        #[serde(rename = "name")]
+        _name: String,
+        #[serde(rename = "payload")]
+        _payload: Option<Payload>,
         enabled: bool,
     }
 
@@ -59,7 +62,8 @@ mod tests {
 
     #[derive(Debug, Deserialize)]
     struct Suite {
-        name: String,
+        #[serde(rename = "name")]
+        _name: String,
         state: api::Features,
         #[serde(flatten)]
         tests: Tests,
