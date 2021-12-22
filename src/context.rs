@@ -1,5 +1,5 @@
 // Copyright 2020 Cognite AS
-//! https://unleash.github.io/docs/unleash_context
+//! <https://docs.getunleash.io/user_guide/unleash_context>
 use std::collections::HashMap;
 
 use serde::{de, Deserialize};
