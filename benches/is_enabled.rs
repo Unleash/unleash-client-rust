@@ -12,7 +12,6 @@ use std::thread;
 use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use enum_map::Enum;
 use maplit::hashmap;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
@@ -21,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use unleash_api_client::api::{Feature, Features, Strategy};
 use unleash_api_client::client;
 use unleash_api_client::context::Context;
+use unleash_api_client::Enum;
 
 // TODO: do a build.rs thing to determine available CPU count at build time for
 // optimal vec sizing.
@@ -214,6 +214,7 @@ fn random_str() -> String {
 
 fn batch(c: &mut Criterion) {
     let _ = simple_logger::SimpleLogger::new()
+        .with_utc_timestamps()
         .with_module_level("isahc::agent", log::LevelFilter::Off)
         .with_module_level("tracing::span", log::LevelFilter::Off)
         .with_module_level("tracing::span::active", log::LevelFilter::Off)
@@ -398,6 +399,7 @@ fn batch(c: &mut Criterion) {
 
 fn single_call(c: &mut Criterion) {
     let _ = simple_logger::SimpleLogger::new()
+        .with_utc_timestamps()
         .with_module_level("isahc::agent", log::LevelFilter::Off)
         .with_module_level("tracing::span", log::LevelFilter::Off)
         .with_module_level("tracing::span::active", log::LevelFilter::Off)

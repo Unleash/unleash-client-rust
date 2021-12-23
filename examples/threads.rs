@@ -10,11 +10,11 @@ use std::thread;
 use std::time::Duration;
 
 use async_std::task;
-use enum_map::Enum;
 use serde::{Deserialize, Serialize};
 
 use unleash_api_client::client;
 use unleash_api_client::config::EnvironmentConfig;
+use unleash_api_client::Enum;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
@@ -23,7 +23,9 @@ enum UserFeatures {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let _ = simple_logger::SimpleLogger::new().init();
+    let _ = simple_logger::SimpleLogger::new()
+        .with_utc_timestamps()
+        .init();
     let config = EnvironmentConfig::from_env()?;
     let client = Arc::new(
         client::ClientBuilder::default()

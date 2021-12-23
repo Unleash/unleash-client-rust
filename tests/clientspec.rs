@@ -6,10 +6,9 @@ mod tests {
     use std::env;
     use std::fs;
 
-    use enum_map::Enum;
     use serde::{Deserialize, Serialize};
 
-    use unleash_api_client::{api, client, context};
+    use unleash_api_client::{api, client, context, Enum};
 
     #[derive(Debug, Deserialize)]
     struct Test {
@@ -25,13 +24,16 @@ mod tests {
     struct Payload {
         #[serde(rename = "type")]
         _type: String,
-        value: String,
+        #[serde(rename = "value")]
+        _value: String,
     }
 
     #[derive(Debug, Deserialize)]
     struct VariantResult {
-        name: String,
-        payload: Option<Payload>,
+        #[serde(rename = "name")]
+        _name: String,
+        #[serde(rename = "payload")]
+        _payload: Option<Payload>,
         enabled: bool,
     }
 
@@ -59,7 +61,8 @@ mod tests {
 
     #[derive(Debug, Deserialize)]
     struct Suite {
-        name: String,
+        #[serde(rename = "name")]
+        _name: String,
         state: api::Features,
         #[serde(flatten)]
         tests: Tests,
@@ -69,6 +72,7 @@ mod tests {
     fn test_client_specification() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
     {
         let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
             .with_module_level("isahc::agent", log::LevelFilter::Off)
             .with_module_level("tracing::span", log::LevelFilter::Off)
             .with_module_level("tracing::span::active", log::LevelFilter::Off)

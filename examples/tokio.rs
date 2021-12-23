@@ -7,12 +7,12 @@
 
 use std::time::Duration;
 
-use enum_map::Enum;
 use futures_timer::Delay;
 use serde::{Deserialize, Serialize};
 
 use unleash_api_client::client;
 use unleash_api_client::config::EnvironmentConfig;
+use unleash_api_client::Enum;
 
 #[allow(non_camel_case_types)]
 #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
@@ -22,7 +22,9 @@ enum UserFeatures {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-    let _ = simple_logger::SimpleLogger::new().init();
+    let _ = simple_logger::SimpleLogger::new()
+        .with_utc_timestamps()
+        .init();
     let config = EnvironmentConfig::from_env()?;
     let client = client::ClientBuilder::default()
         .interval(500)
