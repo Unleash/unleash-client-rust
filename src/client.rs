@@ -573,7 +573,7 @@ where
     pub fn memoize(
         &self,
         features: Vec<Feature>,
-    ) -> Result<Option<Metrics>, Box<dyn std::error::Error>> {
+    ) -> Result<Option<Metrics>, Box<dyn std::error::Error + Send + Sync>> {
         let now = Utc::now();
         trace!("memoize: start with {} features", features.len());
         let source_strategies = self.strategies.lock().unwrap();
