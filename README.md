@@ -22,7 +22,7 @@ The crate documentation should be consulted for more detail.
 
 ## status
 
-Core Unleash API features work, with Rust 1.51 or above.
+Core Unleash API features work, with Rust 1.54 or above.
 
 Missing Unleash specified features:
 
