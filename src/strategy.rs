@@ -4,7 +4,9 @@ use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
 use std::hash::BuildHasher;
 use std::io::Cursor;
+use std::net::IpAddr;
 
+use ipnet::IpNet;
 use log::{trace, warn};
 use murmur3::murmur3_32;
 use rand::Rng;
@@ -227,11 +229,12 @@ pub fn random<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) ->
 pub fn remote_address<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) -> Evaluate {
     // TODO: this could be optimised given the inherent radix structure, but its
     // not exactly hot-path.
-    let mut ips: Vec<ipaddress::IPAddress> = Vec::new();
+    let mut ips: Vec<IpNet> = Vec::new();
+
     if let Some(parameters) = parameters {
         if let Some(ips_str) = parameters.get("IPs") {
             for ip_str in ips_str.split(',') {
-                let ip_parsed = ipaddress::IPAddress::parse(ip_str.trim());
+                let ip_parsed = _parse_ip(ip_str.trim());
                 if let Ok(ip) = ip_parsed {
                     ips.push(ip)
                 }
@@ -242,7 +245,7 @@ pub fn remote_address<S: BuildHasher>(parameters: Option<HashMap<String, String,
     Box::new(move |context: &Context| -> bool {
         if let Some(remote_address) = &context.remote_address {
             for ip in &ips {
-                if ip.includes(&remote_address.0) {
+                if ip.contains(&remote_address.0) {
                     return true;
                 }
             }
@@ -298,10 +301,10 @@ where
     }
 }
 
-fn _ip_to_vec(ips: &[String]) -> Vec<ipaddress::IPAddress> {
+fn _ip_to_vec(ips: &[String]) -> Vec<IpNet> {
     let mut result = Vec::new();
     for ip_str in ips {
-        let ip_parsed = ipaddress::IPAddress::parse(ip_str.trim());
+        let ip_parsed = _parse_ip(ip_str.trim());
         if let Ok(ip) = ip_parsed {
             result.push(ip);
         } else {
@@ -323,7 +326,7 @@ where
                 getter(context)
                     .map(|remote_address| {
                         for ip in &ips {
-                            if ip.includes(&remote_address.0) {
+                            if ip.contains(&remote_address.0) {
                                 return true;
                             }
                         }
@@ -344,7 +347,7 @@ where
                                 return false;
                             }
                             for ip in &ips {
-                                if ip.includes(&remote_address.0) {
+                                if ip.contains(&remote_address.0) {
                                     return false;
                                 }
                             }
@@ -421,6 +424,11 @@ pub fn constrain<S: Fn(Option<HashMap<String, String>>) -> Evaluate + Sync + Sen
     }
 }
 
+fn _parse_ip(ip: &str) -> Result<IpNet, std::net::AddrParseError> {
+    ip.parse::<IpNet>()
+        .or_else(|_| ip.parse::<IpAddr>().map(|addr| addr.into()))
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::hash_map::HashMap;
@@ -432,7 +440,7 @@ mod tests {
     use crate::context::{Context, IPAddress};
 
     fn parse_ip(addr: &str) -> Option<IPAddress> {
-        Some(IPAddress(ipaddress::IPAddress::parse(addr).unwrap()))
+        Some(IPAddress(addr.parse().unwrap()))
     }
 
     #[test]
@@ -789,7 +797,7 @@ mod tests {
     #[test]
     fn test_remote_address() {
         let params: HashMap<String, String> = hashmap! {
-            "IPs".into() => "1.2/8,2.3.4.5,2222:FF:0:1234::/64".into()
+            "IPs".into() => "1.2.0.0/8,2.3.4.5,2222:FF:0:1234::/64".into()
         };
         let c: Context = Context {
             remote_address: parse_ip("1.2.3.4"),
