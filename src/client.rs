@@ -1208,9 +1208,7 @@ mod tests {
             ..Default::default()
         };
         let host1: Context = Context {
-            remote_address: Some(IPAddress(
-                ipaddress::IPAddress::parse("10.10.10.10").unwrap(),
-            )),
+            remote_address: Some(IPAddress("10.10.10.10".parse().unwrap())),
             ..Default::default()
         };
         let variant1 = Variant {
@@ -1285,9 +1283,7 @@ mod tests {
             ..Default::default()
         };
         let host1: Context = Context {
-            remote_address: Some(IPAddress(
-                ipaddress::IPAddress::parse("10.10.10.10").unwrap(),
-            )),
+            remote_address: Some(IPAddress("10.10.10.10".parse().unwrap())),
             ..Default::default()
         };
         let variant1 = Variant {
