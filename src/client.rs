@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use arc_swap::ArcSwapOption;
 use chrono::Utc;
-use enum_map::EnumMap;
+use enum_map::{EnumArray, EnumMap};
 use futures_timer::Delay;
 use log::{debug, trace, warn};
 use rand::Rng;
@@ -20,7 +20,6 @@ use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration};
 use crate::context::Context;
 use crate::http::HTTP;
 use crate::strategy;
-use crate::Enum;
 
 // ----------------- Variant
 
@@ -70,7 +69,7 @@ impl ClientBuilder {
         authorization: Option<String>,
     ) -> Result<Client<F>, http_client::Error>
     where
-        F: Enum<CachedFeature> + Debug + DeserializeOwned + Serialize,
+        F: EnumArray<CachedFeature> + Debug + DeserializeOwned + Serialize,
     {
         Ok(Client {
             api_url: api_url.into(),
@@ -148,7 +147,7 @@ pub struct CachedFeature {
 
 pub struct CachedState<F>
 where
-    F: Enum<CachedFeature>,
+    F: EnumArray<CachedFeature>,
 {
     start: chrono::DateTime<chrono::Utc>,
     // user supplies F defining the features they need
@@ -159,7 +158,7 @@ where
 
 impl<F> CachedState<F>
 where
-    F: Enum<CachedFeature>,
+    F: EnumArray<CachedFeature>,
 {
     /// Access the cached string features.
     pub fn str_features(&self) -> &HashMap<String, CachedFeature> {
@@ -169,7 +168,7 @@ where
 
 pub struct Client<F>
 where
-    F: Enum<CachedFeature> + Debug + DeserializeOwned + Serialize,
+    F: EnumArray<CachedFeature> + Debug + DeserializeOwned + Serialize,
 {
     api_url: String,
     app_name: String,
@@ -188,7 +187,7 @@ where
 
 trait Enabled<F>
 where
-    F: Enum<CachedFeature>,
+    F: EnumArray<CachedFeature>,
 {
     fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool;
     fn is_enabled_str(
@@ -202,7 +201,7 @@ where
 
 impl<'a, F> Enabled<F> for &Arc<CachedState<F>>
 where
-    F: Enum<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
+    F: EnumArray<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
 {
     fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
         trace!(
@@ -387,7 +386,7 @@ where
 
 impl<F> Client<F>
 where
-    F: Enum<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
+    F: EnumArray<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
 {
     /// The cached state can be accessed. It may be uninitialised, and
     /// represents a point in time snapshot: subsequent calls may have wound the
@@ -815,6 +814,7 @@ mod tests {
     use std::default::Default;
     use std::hash::BuildHasher;
 
+    use enum_map::Enum;
     use maplit::hashmap;
     use serde::{Deserialize, Serialize};
 
@@ -822,7 +822,6 @@ mod tests {
     use crate::api::{self, Feature, Features, Strategy};
     use crate::context::{Context, IPAddress};
     use crate::strategy;
-    use crate::Enum;
 
     fn features() -> Features {
         Features {

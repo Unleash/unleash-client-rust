@@ -26,12 +26,12 @@
 //! use async_std::task;
 //! use futures_timer::Delay;
 //! use serde::{Deserialize, Serialize};
+//! use enum_map::Enum;
 //!
 //! use unleash_api_client::client;
 //! use unleash_api_client::config::EnvironmentConfig;
 //! use unleash_api_client::context::Context;
 //! use unleash_api_client::strategy;
-//! use unleash_api_client::Enum;
 //!
 //! fn _reversed_uids<S: BuildHasher>(
 //!     parameters: Option<HashMap<String, String, S>>,
@@ -83,6 +83,11 @@
 //!     })
 //! }
 //! ```
+//!
+//!  Previously there was a Re-export of enum_map::Enum - this trait is part of
+//!  our public API. But there is a bug:
+//!  https://gitlab.com/KonradBorowski/enum-map/-/issues/22 so instead you must
+//!  match the version in your dependencies.
 
 #![warn(clippy::all)]
 pub mod api;
@@ -91,9 +96,6 @@ pub mod config;
 pub mod context;
 pub mod http;
 pub mod strategy;
-
-/// Re-export of enum_map::Enum - this trait is part of our public API.
-pub use enum_map::Enum;
 
 // Exports for ergonomical use
 pub use crate::client::{Client, ClientBuilder};
@@ -105,7 +107,9 @@ pub use crate::strategy::Evaluate;
 ///
 /// ```no_run
 /// use serde::{Deserialize, Serialize};
+/// use enum_map::Enum;
 /// use unleash_api_client::prelude::*;
+///
 /// let config = EnvironmentConfig::from_env()?;
 ///
 /// #[allow(non_camel_case_types)]
@@ -126,5 +130,4 @@ pub use crate::strategy::Evaluate;
 pub mod prelude {
     pub use crate::client::ClientBuilder;
     pub use crate::config::EnvironmentConfig;
-    pub use crate::Enum;
 }
