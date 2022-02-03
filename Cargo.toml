@@ -28,12 +28,13 @@ path = "src/bin/dump-features.rs"
 anyhow = "1.0.44"
 arc-swap = "1.4.0"
 async-std = "1.10.0"
-enum-map = "1.1.1"
+enum-map = "2.0.1"
 futures = "0.3.17"
 futures-timer = "3.0.2"
 hostname = "0.3.1"
 http-client = "6.5.1"
 http-types = "2.12.0"
+ipnet = "2.3.1"
 log = "0.4.14"
 maplit = "1.0.2"
 murmur3 = "0.5.1"
@@ -41,7 +42,6 @@ rand = "0.8.4"
 serde_json = "1.0.68"
 serde_plain = "1.0.0"
 surf = "2.3.1"
-ipnet = "2.3.1"
 
 [dependencies.chrono]
 features = ["serde"]
@@ -54,7 +54,7 @@ version = "1.0"
 [dev-dependencies]
 criterion = "0.3.5"
 num_cpus = "1.13.0"
-simple_logger = "1.16.0"
+simple_logger = "2.1.0"
 
 [dev-dependencies.tokio]
 features = ["rt-multi-thread", "macros"]
