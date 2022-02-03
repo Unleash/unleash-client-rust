@@ -1,4 +1,4 @@
-// Copyright 2020 Cognite AS
+// Copyright 2020,2021 Cognite AS
 //! [Unleash](https://unleash.github.io) is a feature flag API system. This is a
 //! client for it to facilitate using the API to control features in Rust programs.
 //!
