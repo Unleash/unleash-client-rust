@@ -298,6 +298,54 @@ where
                 })
             }
         }
+        ConstraintExpression::StrEndsWith(values) => {
+            if values.is_empty() {
+                Box::new(|_| false)
+            } else {
+                let as_vec: Vec<String> = values.to_vec();
+                Box::new(move |context: &Context| {
+                    getter(context)
+                        .map(|v| as_vec.iter().any(|x| x.starts_with(v)))
+                        .unwrap_or(false)
+                })
+            }
+        }
+        ConstraintExpression::StrStartsWith(values) => {
+            panic!();
+        }
+        ConstraintExpression::StrContains(values) => {
+            panic!()
+        }
+        ConstraintExpression::NumEq(values) => {
+            panic!()
+        }
+        ConstraintExpression::NumGt(values) => {
+            panic!()
+        }
+        ConstraintExpression::NumGte(values) => {
+            panic!()
+        }
+        ConstraintExpression::NumLt(values) => {
+            panic!()
+        }
+        ConstraintExpression::NumLte(values) => {
+            panic!()
+        }
+        ConstraintExpression::DateAfter(values) => {
+            panic!()
+        }
+        ConstraintExpression::DateBefore(values) => {
+            panic!()
+        }
+        ConstraintExpression::SemverEq(values) => {
+            panic!()
+        }
+        ConstraintExpression::SemverGt(values) => {
+            panic!()
+        }
+        ConstraintExpression::SemverLt(values) => {
+            panic!()
+        }
     }
 }
 
@@ -357,6 +405,8 @@ where
                 })
             }
         }
+        // New operators aren't defined for an ip
+        _ => Box::new(move |context: &Context| false),
     }
 }
 
