@@ -18,9 +18,50 @@ The unleash defined strategies are included, to support custom strategies
 use the `ClientBuilder` and call the `strategy` method to register your custom
 strategy memoization function.
 
-The crate documentation should be consulted for more detail.
+The [crate documentation](https://docs.rs/unleash-api-client/0.6.0/unleash_api_client) should be consulted for more detail.
 
-## status
+### Configuration
+The easiest way to get started with the `Client` is using the `ClientBuilder`. A simple example is provided:
+
+```rust
+let config = EnvironmentConfig::from_env()?;
+let client = client::ClientBuilder::default()
+    .interval(500)
+    .into_client::<UserFeatures>(
+        &config.api_url,
+        &config.app_name,
+        &config.instance_id,
+        config.secret,
+    )?;
+client.register().await?;
+```
+The values required for the `into_client` method are described as follows (in order, as seen above):
+
+* api_url - The server URL to fetch toggles from.
+* app_name - The name of your application.
+* instance_id - A unique ID, ideally per run. A runtime generated UUID would be a sensible choice here.
+* authorization - An Unleash client secret, if set this will be passed as the authorization header.
+
+While the above code shows the usage of the `EnvironmentConfig`, this isn't required and is provided as a convenient way of reading a data from the system environment variables.
+
+EnvironmentConfig Property | Environment Variable | Required? |
+---------|-------------|-----------|-------|
+api_url  | `UNLEASH_API_URL`      | Yes |
+app_name | `UNLEASH_APP_NAME`     | Yes |
+instance_id | `UNLEASH_INSTANCE_ID` | Yes |
+secret | `UNLEASH_CLIENT_SECRET` | No |
+
+Note that if you do use the `EnvironmentConfig` as a way of accessing the system variables, you'll need to ensure that all the environment variables marked as required in the above table are set, or a panic will be raised.
+
+The ClientBuilder also has a few builder methods for setting properties which are assumed to have good defaults and generally do not require changing. If you do need to alter these properties you can invoke the following methods on the builder (as seen above with the interval).
+
+Method | Argument | Description | Default |
+---------|-------------|-----------|-------|
+interval  | u64 | Sets the polling interval to the Unleash server, in milliseconds | 15000ms |
+disable_metric_submission | N/A | Turns off the metrics submission to Unleash | On |
+enable_string_features | N/A | By default the Rust SDK requires you to define an enum for feature resolution, turning this on will allow you to resolve your features by string types instead, through the use of the `is_enabled_str` method. Be warned that this is enforced by asserts and calling `is_enabled_str` without turning this on with result in a panic | Off
+
+## Status
 
 Core Unleash API features work, with Rust 1.56 or above.
 
