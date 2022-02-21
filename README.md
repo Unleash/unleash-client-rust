@@ -37,19 +37,19 @@ client.register().await?;
 ```
 The values required for the `into_client` method are described as follows (in order, as seen above):
 
-* api_url - The server URL to fetch toggles from.
-* app_name - The name of your application.
-* instance_id - A unique ID, ideally per run. A runtime generated UUID would be a sensible choice here.
-* authorization - An Unleash client secret, if set this will be passed as the authorization header.
+* `api_url` - The server URL to fetch toggles from.
+* `app_name` - The name of your application.
+* `instance_id` - A unique ID, ideally per run. A runtime generated UUID would be a sensible choice here.
+* `authorization` - An Unleash client secret, if set this will be passed as the authorization header.
 
 While the above code shows the usage of the `EnvironmentConfig`, this isn't required and is provided as a convenient way of reading a data from the system environment variables.
 
 EnvironmentConfig Property | Environment Variable | Required? |
 ---------|-------------|-----------|-------|
-api_url  | `UNLEASH_API_URL`      | Yes |
-app_name | `UNLEASH_APP_NAME`     | Yes |
-instance_id | `UNLEASH_INSTANCE_ID` | Yes |
-secret | `UNLEASH_CLIENT_SECRET` | No |
+`api_url`  | `UNLEASH_API_URL`      | Yes |
+`app_name` | `UNLEASH_APP_NAME`     | Yes |
+`instance_id` | `UNLEASH_INSTANCE_ID` | Yes |
+`secret` | `UNLEASH_CLIENT_SECRET` | No |
 
 Note that if you do use the `EnvironmentConfig` as a way of accessing the system variables, you'll need to ensure that all the environment variables marked as required in the above table are set, or a panic will be raised.
 
