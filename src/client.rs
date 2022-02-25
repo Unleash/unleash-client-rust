@@ -486,7 +486,8 @@ where
         let mut remote_address: Option<String> = None;
         let identifier = context
             .user_id
-            .as_ref().or(context.session_id.as_ref())
+            .as_ref()
+            .or(context.session_id.as_ref())
             .or_else(|| {
                 context.remote_address.as_ref().and_then({
                     |addr| {
