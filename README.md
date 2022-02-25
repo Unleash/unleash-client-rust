@@ -18,7 +18,7 @@ The unleash defined strategies are included, to support custom strategies
 use the `ClientBuilder` and call the `strategy` method to register your custom
 strategy memoization function.
 
-The [crate documentation](https://docs.rs/unleash-api-client/0.6.0/unleash_api_client) should be consulted for more detail.
+The [crate documentation](https://docs.rs/unleash-api-client/latest/unleash_api_client/) should be consulted for more detail.
 
 ### Configuration
 The easiest way to get started with the `Client` is using the `ClientBuilder`. A simple example is provided:
