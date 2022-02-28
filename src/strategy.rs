@@ -1,7 +1,6 @@
 // Copyright 2020 Cognite AS
 //! <https://docs.getunleash.io/user_guide/activation_strategy>
 use chrono::DateTime;
-use chrono::FixedOffset;
 use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
 use std::hash::BuildHasher;
@@ -315,10 +314,22 @@ where
             if values.is_empty() {
                 Box::new(move |_| _handle_inversion(&false, &inverted))
             } else {
-                let as_vec: Vec<String> = values.to_vec();
+                let mut as_vec: Vec<String> = values.to_vec();
+                let case_insensitive = case_insensitive.unwrap_or(false);
+                if case_insensitive {
+                    as_vec = as_vec.iter_mut().map(|x| x.to_lowercase()).collect();
+                };
                 Box::new(move |context: &Context| {
                     let value = getter(context)
-                        .map(|v| as_vec.iter().any(|x| v.starts_with(x)))
+                        .map(|v| {
+                            as_vec.iter().any(|x| {
+                                if case_insensitive {
+                                    v.to_lowercase().starts_with(x)
+                                } else {
+                                    v.starts_with(x)
+                                }
+                            })
+                        })
                         .unwrap_or(false);
                     _handle_inversion(&value, &inverted)
                 })
@@ -359,10 +370,20 @@ where
             if values.is_empty() {
                 Box::new(|_| false)
             } else {
-                let as_vec: Vec<String> = values.to_vec();
+                let mut as_vec: Vec<String> = values.to_vec();
+                let case_insensitive = case_insensitive.unwrap_or(false);
+                if case_insensitive {
+                    as_vec = as_vec.iter_mut().map(|x| x.to_lowercase()).collect();
+                };
                 Box::new(move |context: &Context| {
                     let value = getter(context)
-                        .map(|v| as_vec.iter().any(|x| v.contains(x)))
+                        .map(|v| as_vec.iter().any(|x| {
+                            if case_insensitive {
+                                v.to_lowercase().contains(x)
+                            } else {
+                                v.contains(x)
+                            }
+                        }))
                         .unwrap_or(false);
                     _handle_inversion(&value, &inverted)
                 })
@@ -1800,17 +1821,63 @@ mod tests {
             None
         )(&context));
 
-        // assert!(!super::constrain(
-        //     Some(vec![Constraint {
-        //         context_name: "remoteAddress".into(),
-        //         inverted: Some(true),
-        //         expression: ConstraintExpression::NotIn {
-        //             values: vec!["11.0.0.0/8".into()],
-        //         },
-        //     }]),
-        //     &super::default,
-        //     None
-        // )(&context));
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "remoteAddress".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::NotIn {
+                    values: vec!["11.0.0.0/8".into()],
+                },
+            }]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_case_insensitive() {
+        let context = Context {
+            environment: "development".into(),
+            ..Default::default()
+        };
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: ConstraintExpression::StrStartsWith {
+                    values: vec!["DEV".into()],
+                    case_insensitive: Some(true),
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: ConstraintExpression::StrEndsWith {
+                    values: vec!["ENT".into()],
+                    case_insensitive: Some(true),
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: ConstraintExpression::StrContains {
+                    values: vec!["ELOP".into()],
+                    case_insensitive: Some(true),
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
     }
 
     #[test]
