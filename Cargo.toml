@@ -43,7 +43,6 @@ serde_json = "1.0.68"
 serde_plain = "1.0.0"
 surf = "2.3.1"
 semver = "1.0.5"
-str-utils = "0.1.5"
 
 [dependencies.chrono]
 features = ["serde"]
