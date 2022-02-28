@@ -296,7 +296,7 @@ where
         }
         ConstraintExpression::NotIn { values } => {
             if values.is_empty() {
-                Box::new(move |_| _handle_inversion(&false, &inverted))
+                Box::new(move |_| _handle_inversion(&true, &inverted))
             } else {
                 let as_set: HashSet<String> = values.iter().cloned().collect();
                 Box::new(move |context: &Context| {
