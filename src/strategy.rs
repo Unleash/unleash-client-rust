@@ -529,7 +529,7 @@ where
         ConstraintExpression::In { values } => {
             let ips = _ip_to_vec(values);
             Box::new(move |context: &Context| {
-                getter(context)
+                let value = getter(context)
                     .map(|remote_address| {
                         for ip in &ips {
                             if ip.contains(&remote_address.0) {
@@ -538,7 +538,8 @@ where
                         }
                         false
                     })
-                    .unwrap_or(false)
+                    .unwrap_or(false);
+                _handle_inversion(&value, &inverted)
             })
         }
         ConstraintExpression::NotIn { values } => {
@@ -547,7 +548,7 @@ where
             } else {
                 let ips = _ip_to_vec(values);
                 Box::new(move |context: &Context| {
-                    getter(context)
+                    let value = getter(context)
                         .map(|remote_address| {
                             if ips.is_empty() {
                                 return false;
@@ -559,7 +560,8 @@ where
                             }
                             true
                         })
-                        .unwrap_or(false)
+                        .unwrap_or(false);
+                    _handle_inversion(&value, &inverted)
                 })
             }
         }
@@ -1585,6 +1587,230 @@ mod tests {
             &super::default,
             None
         )(&context));
+    }
+
+    #[test]
+    fn test_inversion() {
+        let context = Context {
+            environment: "2".into(),
+            ..Default::default()
+        };
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::NumEq { value: "2".into() },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::NumLt { value: "3".into() },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::NumLte { value: "3".into() },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::NumGt { value: "1".into() },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::NumGte { value: "1".into() },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        let context = Context {
+            environment: "3.1.4-beta.2".into(),
+            ..Default::default()
+        };
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::SemverEq {
+                    value: "3.1.4-beta.2".into()
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::SemverLt {
+                    value: "2.7.1".into()
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::SemverGt {
+                    value: "4.7.1".into()
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        let context = Context {
+            current_time: "2022-01-30T13:00:00.000Z".into(),
+            ..Default::default()
+        };
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::DateAfter {
+                    value: "2022-01-29T13:00:00.000Z".into()
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::DateBefore {
+                    value: "2022-01-31T13:00:00.000Z".into()
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        let context = Context {
+            environment: "development".into(),
+            ..Default::default()
+        };
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::StrStartsWith {
+                    values: vec!["dev".into()],
+                    case_insensitive: Some(false),
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::StrEndsWith {
+                    values: vec!["ent".into()],
+                    case_insensitive: Some(false),
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::StrContains {
+                    values: vec!["development".into()],
+                    case_insensitive: Some(false),
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::In {
+                    values: vec!["development".into()],
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::NotIn {
+                    values: vec!["production".into()],
+                },
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        let context = Context {
+            remote_address: parse_ip("10.20.30.40"),
+            ..Default::default()
+        };
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "remoteAddress".into(),
+                inverted: Some(true),
+                expression: ConstraintExpression::In {
+                    values: vec!["10.0.0.0/8".into()],
+                },
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // assert!(!super::constrain(
+        //     Some(vec![Constraint {
+        //         context_name: "remoteAddress".into(),
+        //         inverted: Some(true),
+        //         expression: ConstraintExpression::NotIn {
+        //             values: vec!["11.0.0.0/8".into()],
+        //         },
+        //     }]),
+        //     &super::default,
+        //     None
+        // )(&context));
     }
 
     #[test]
