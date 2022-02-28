@@ -3,6 +3,7 @@
 use std::{collections::HashMap, net::IpAddr};
 
 use serde::{de, Deserialize};
+use chrono::Utc;
 
 // Custom IP Address newtype that can be deserialised from strings e.g. 127.0.0.1 for use with tests.
 #[derive(Debug)]
@@ -38,6 +39,11 @@ pub struct Context {
     pub properties: HashMap<String, String>,
     #[serde(default, rename = "appName")]
     pub app_name: String,
-    #[serde(default)]
     pub environment: String,
+    #[serde(default, rename = "currentTime")]
+    pub current_time: String
+}
+
+fn current_time() -> String {
+    Utc::now().to_rfc3339()
 }

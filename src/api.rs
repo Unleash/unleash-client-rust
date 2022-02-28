@@ -45,44 +45,57 @@ pub struct Strategy {
 pub struct Constraint {
   #[serde(rename = "contextName")]
   pub context_name: String,
+  pub inverted: Option<bool>,
   #[serde(flatten)]
   pub expression: ConstraintExpression,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(tag = "operator", content = "values")]
+#[serde(tag = "operator")]
 // #[serde(deny_unknown_fields)]
 pub enum ConstraintExpression {
   #[serde(rename = "IN")]
-  In(Vec<String>),
+  In { values: Vec<String> },
   #[serde(rename = "NOT_IN")]
-  NotIn(Vec<String>),
+  NotIn { values: Vec<String> },
   #[serde(rename = "STR_ENDS_WITH")]
-  StrEndsWith(Vec<String>),
+  StrEndsWith {
+    values: Vec<String>,
+    #[serde(rename = "caseInsensitive")]
+    case_insensitive: Option<bool>,
+  },
   #[serde(rename = "STR_STARTS_WITH")]
-  StrStartsWith(Vec<String>),
+  StrStartsWith {
+    values: Vec<String>,
+    #[serde(rename = "caseInsensitive")]
+    case_insensitive: Option<bool>,
+  },
   #[serde(rename = "STR_CONTAINS")]
-  StrContains(Vec<String>),
+  StrContains {
+    values: Vec<String>,
+    #[serde(rename = "caseInsensitive")]
+    case_insensitive: Option<bool>,
+  },
   #[serde(rename = "NUM_EQ")]
-  NumEq(String),
+  NumEq { value: String },
   #[serde(rename = "NUM_GT")]
-  NumGt(Vec<String>),
+  NumGt { value: String },
   #[serde(rename = "NUM_GTE")]
-  NumGte(Vec<String>),
+  NumGte { value: String },
   #[serde(rename = "NUM_LT")]
-  NumLt(Vec<String>),
+  NumLt { value: String },
   #[serde(rename = "NUM_LTE")]
-  NumLte(Vec<String>),
+  NumLte { value: String },
   #[serde(rename = "DATE_AFTER")]
-  DateAfter(Vec<String>),
+  DateAfter { value: String },
   #[serde(rename = "DATE_BEFORE")]
-  DateBefore(Vec<String>),
+  DateBefore { value: String },
   #[serde(rename = "SEMVER_EQ")]
-  SemverEq(Vec<String>),
+  SemverEq { value: String },
   #[serde(rename = "SEMVER_GT")]
-  SemverGt(Vec<String>),
+  SemverGt { value: String },
   #[serde(rename = "SEMVER_LT")]
-  SemverLt(Vec<String>),
+  SemverLt { value: String },
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -160,6 +173,38 @@ pub struct MetricsBucket {
 #[cfg(test)]
 mod tests {
   use super::Registration;
+  use super::*;
+
+  #[test]
+  fn parses_advanced_constraint_structure() -> Result<(), serde_json::Error> {
+    let data = r#"
+    {
+      "contextName": "customField",
+      "operator": "STR_STARTS_WITH",
+      "values": ["some-string"]
+    }"#;
+    let _: super::Constraint = serde_json::from_str(data)?;
+
+    let data = r#"
+    {
+      "contextName": "customField",
+      "operator": "NUM_GTE",
+      "value": "7"
+    }"#;
+    let _: super::Constraint = serde_json::from_str(data)?;
+
+    let data = r#"
+    {
+      "contextName": "customField",
+      "operator": "STR_STARTS_WITH",
+      "values": ["some-string"],
+      "caseInsensitive": true,
+      "inverted": true
+    }"#;
+    let _: super::Constraint = serde_json::from_str(data)?;
+
+    Ok(())
+  }
 
   #[test]
   fn parse_reference_doc() -> Result<(), serde_json::Error> {
