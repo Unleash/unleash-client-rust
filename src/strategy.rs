@@ -291,18 +291,20 @@ where
         ConstraintExpression::In { values } => {
             let as_set: HashSet<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
-                getter(context).map(|v| as_set.contains(v)).unwrap_or(false)
+                let value = getter(context).map(|v| as_set.contains(v)).unwrap_or(false);
+                _handle_inversion(&value, &inverted)
             })
         }
         ConstraintExpression::NotIn { values } => {
             if values.is_empty() {
-                Box::new(|_| true)
+                Box::new(move |_| _handle_inversion(&false, &inverted))
             } else {
                 let as_set: HashSet<String> = values.iter().cloned().collect();
                 Box::new(move |context: &Context| {
-                    getter(context)
+                    let value = getter(context)
                         .map(|v| !as_set.contains(v))
-                        .unwrap_or(false)
+                        .unwrap_or(false);
+                    _handle_inversion(&value, &inverted)
                 })
             }
         }
@@ -311,13 +313,14 @@ where
             case_insensitive,
         } => {
             if values.is_empty() {
-                Box::new(|_| false)
+                Box::new(move |_| _handle_inversion(&false, &inverted))
             } else {
                 let as_vec: Vec<String> = values.to_vec();
                 Box::new(move |context: &Context| {
-                    getter(context)
+                    let value = getter(context)
                         .map(|v| as_vec.iter().any(|x| v.starts_with(x)))
-                        .unwrap_or(false)
+                        .unwrap_or(false);
+                    _handle_inversion(&value, &inverted)
                 })
             }
         }
@@ -326,7 +329,7 @@ where
             case_insensitive,
         } => {
             if values.is_empty() {
-                Box::new(|_| false)
+                Box::new(move |_| _handle_inversion(&false, &inverted))
             } else {
                 let mut as_vec: Vec<String> = values.to_vec();
                 let case_insensitive = case_insensitive.unwrap_or(false);
@@ -334,7 +337,7 @@ where
                     as_vec = as_vec.iter_mut().map(|x| x.to_lowercase()).collect();
                 };
                 Box::new(move |context: &Context| {
-                    getter(context)
+                    let value = getter(context)
                         .map(|v| {
                             as_vec.iter().any(|x| {
                                 if case_insensitive {
@@ -344,7 +347,8 @@ where
                                 }
                             })
                         })
-                        .unwrap_or(false)
+                        .unwrap_or(false);
+                    _handle_inversion(&value, &inverted)
                 })
             }
         }
@@ -356,108 +360,103 @@ where
                 Box::new(|_| false)
             } else {
                 let as_vec: Vec<String> = values.to_vec();
-                let inverted = inverted.unwrap_or(false);
                 Box::new(move |context: &Context| {
                     let value = getter(context)
                         .map(|v| as_vec.iter().any(|x| v.contains(x)))
                         .unwrap_or(false);
-                    if inverted {
-                        !value
-                    } else {
-                        value
-                    }
+                    _handle_inversion(&value, &inverted)
                 })
             }
         }
         ConstraintExpression::NumEq { value } => match value.parse::<f64>() {
-            Ok(parsed_value) => {
-                let inverted = inverted.unwrap_or(false);
-                Box::new(move |context: &Context| {
-                    let value = getter(context)
-                        .map(|v| {
-                            v.parse::<f64>()
-                                .map(|x| (x - parsed_value).abs() < f64::EPSILON)
-                                .unwrap_or(false)
-                        })
-                        .unwrap_or(false);
-                    if inverted {
-                        !value
-                    } else {
-                        value
-                    }
-                })
-            }
-            Err(_) => Box::new(|_| false),
+            Ok(parsed_value) => Box::new(move |context: &Context| {
+                let value = getter(context)
+                    .map(|v| {
+                        v.parse::<f64>()
+                            .map(|x| (x - parsed_value).abs() < f64::EPSILON)
+                            .unwrap_or(false)
+                    })
+                    .unwrap_or(false);
+                _handle_inversion(&value, &inverted)
+            }),
+            Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
         },
         ConstraintExpression::NumGt { value } => match value.parse::<f64>() {
             Ok(parsed_value) => Box::new(move |context: &Context| {
-                _evaluate_ordinal_constraint(
+                let value = _evaluate_ordinal_constraint(
                     getter(context),
                     &parsed_value,
                     |context_value, constraint_value| context_value < constraint_value,
-                )
+                );
+                _handle_inversion(&value, &inverted)
             }),
-            Err(_) => Box::new(|_| false),
+            Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
         },
         ConstraintExpression::NumGte { value } => match value.parse::<f64>() {
             Ok(parsed_value) => Box::new(move |context: &Context| {
-                _evaluate_ordinal_constraint(
+                let value = _evaluate_ordinal_constraint(
                     getter(context),
                     &parsed_value,
                     |context_value, constraint_value| context_value <= constraint_value,
-                )
+                );
+                _handle_inversion(&value, &inverted)
             }),
-            Err(_) => Box::new(|_| false),
+            Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
         },
         ConstraintExpression::NumLt { value } => match value.parse::<f64>() {
             Ok(parsed_value) => Box::new(move |context: &Context| {
-                _evaluate_ordinal_constraint(
+                let value = _evaluate_ordinal_constraint(
                     getter(context),
                     &parsed_value,
                     |context_value, constraint_value| context_value > constraint_value,
-                )
+                );
+                _handle_inversion(&value, &inverted)
             }),
-            Err(_) => Box::new(|_| false),
+            Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
         },
         ConstraintExpression::NumLte { value } => match value.parse::<f64>() {
             Ok(parsed_value) => Box::new(move |context: &Context| {
-                _evaluate_ordinal_constraint(
+                let value = _evaluate_ordinal_constraint(
                     getter(context),
                     &parsed_value,
                     |context_value, constraint_value| context_value >= constraint_value,
-                )
+                );
+                _handle_inversion(&value, &inverted)
             }),
-            Err(_) => Box::new(|_| false),
+            Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
         },
         ConstraintExpression::DateAfter { value } => match DateTime::parse_from_rfc3339(value) {
             Ok(parsed_value) => Box::new(move |context: &Context| {
-                _evaluate_ordinal_constraint(
+                let value = _evaluate_ordinal_constraint(
                     getter(context),
                     &parsed_value,
                     |context_value, constraint_value| context_value < constraint_value,
-                )
+                );
+                _handle_inversion(&value, &inverted)
             }),
-            Err(_) => Box::new(|_| false),
+            Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
         },
         ConstraintExpression::DateBefore { value } => match DateTime::parse_from_rfc3339(value) {
             Ok(parsed_value) => Box::new(move |context: &Context| {
-                _evaluate_ordinal_constraint(
+                let value = _evaluate_ordinal_constraint(
                     getter(context),
                     &parsed_value,
                     |context_value, constraint_value| context_value > constraint_value,
-                )
+                );
+                _handle_inversion(&value, &inverted)
             }),
-            Err(_) => Box::new(|_| false),
+            Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
         },
         ConstraintExpression::SemverEq { value } => match value.parse::<Version>() {
             Ok(parsed_value) => Box::new(move |context: &Context| {
-                _evaluate_ordinal_constraint(
+                let value = _evaluate_ordinal_constraint(
                     getter(context),
                     &parsed_value,
                     |context_value, constraint_value| context_value == constraint_value,
-                )
+                );
+                _handle_inversion(&value, &inverted)
             }),
-            Err(_) => Box::new(|_| false),
+            Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
         },
         ConstraintExpression::SemverGt { value } => match value.parse::<Version>() {
             Ok(parsed_value) => Box::new(move |context: &Context| {
@@ -465,7 +464,7 @@ where
                     .map(|v| Version::parse(v).map(|x| x > parsed_value).unwrap_or(false))
                     .unwrap_or(false)
             }),
-            Err(_) => Box::new(|_| false),
+            Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
         },
         ConstraintExpression::SemverLt { value } => match value.parse::<Version>() {
             Ok(parsed_value) => Box::new(move |context: &Context| {
@@ -473,7 +472,7 @@ where
                     .map(|v| Version::parse(v).map(|x| x < parsed_value).unwrap_or(false))
                     .unwrap_or(false)
             }),
-            Err(_) => Box::new(|_| false),
+            Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
         },
     }
 }
@@ -489,6 +488,14 @@ fn _ip_to_vec(ips: &[String]) -> Vec<IpNet> {
         }
     }
     result
+}
+
+fn _handle_inversion(value: &bool, inverted: &Option<bool>) -> bool {
+    if inverted.unwrap_or(false) {
+        !value
+    } else {
+        *value
+    }
 }
 
 fn _evaluate_ordinal_constraint<F, T>(
