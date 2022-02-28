@@ -377,13 +377,15 @@ where
                 };
                 Box::new(move |context: &Context| {
                     let value = getter(context)
-                        .map(|v| as_vec.iter().any(|x| {
-                            if case_insensitive {
-                                v.to_lowercase().contains(x)
-                            } else {
-                                v.contains(x)
-                            }
-                        }))
+                        .map(|v| {
+                            as_vec.iter().any(|x| {
+                                if case_insensitive {
+                                    v.to_lowercase().contains(x)
+                                } else {
+                                    v.contains(x)
+                                }
+                            })
+                        })
                         .unwrap_or(false);
                     _handle_inversion(&value, &inverted)
                 })
