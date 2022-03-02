@@ -1,6 +1,7 @@
 // Copyright 2020 Cognite AS
 //! <https://docs.getunleash.io/user_guide/activation_strategy>
 use chrono::DateTime;
+use enum_dispatch::enum_dispatch;
 use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
 use std::hash::BuildHasher;
@@ -521,6 +522,49 @@ fn _handle_inversion(value: &bool, inverted: &Option<bool>) -> bool {
     }
 }
 
+pub enum StrConstraint {
+    StrEndsWith(Vec<String>),
+}
+
+#[enum_dispatch]
+pub enum NumericConstraint {
+    NumEq(String),
+    NumGt(String),
+    NumGte(String),
+}
+
+impl EvaluatorConstructor for NumericConstraint {
+    fn yield_evaluator(&self) -> Evaluate {
+        match self {
+            NumericConstraint::NumEq(value) => match value.parse::<f64>() {
+                Ok(parsed_value) => Box::new(move|_|{
+                    false
+                }),
+                Err(_) => Box::new(move |_| false),
+            },
+            NumericConstraint::NumGt(_) => todo!(),
+            NumericConstraint::NumGte(_) => todo!(),
+        }
+    }
+}
+
+impl EvaluatorConstructor for StrConstraint {
+    fn yield_evaluator(&self) -> Evaluate {
+        todo!()
+    }
+}
+
+#[enum_dispatch]
+pub enum NestedConstraintExpression {
+    NumericConstraint,
+    StrConstraint,
+}
+
+#[enum_dispatch(NestedConstraintExpression)]
+pub trait EvaluatorConstructor {
+    fn yield_evaluator(&self) -> Evaluate;
+}
+
 fn _evaluate_ordinal_constraint<F, T>(
     context_value: Option<&String>,
     constraint_value: &T,
@@ -671,6 +715,7 @@ fn _parse_ip(ip: &str) -> Result<IpNet, std::net::AddrParseError> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::collections::hash_map::HashMap;
     use std::default::Default;
 
@@ -681,6 +726,14 @@ mod tests {
 
     fn parse_ip(addr: &str) -> Option<IPAddress> {
         Some(IPAddress(addr.parse().unwrap()))
+    }
+
+    #[test]
+    fn converts_constraint_type() -> Result<(), serde_json::Error> {
+        let constraint: NestedConstraintExpression = NumericConstraint::NumEq("7".into()).into();
+        constraint.yield_evaluator();
+
+        Ok(())
     }
 
     #[test]
