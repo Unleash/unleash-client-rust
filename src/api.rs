@@ -4,7 +4,10 @@ use std::collections::HashMap;
 use std::default::Default;
 
 use chrono::Utc;
+use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
+
+use crate::{Context, Evaluate};
 
 #[derive(Serialize, Deserialize, Debug)]
 // #[serde(deny_unknown_fields)]
@@ -41,6 +44,60 @@ pub struct Strategy {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum StrConstraint {
+    StrEndsWith(Vec<String>, bool),
+    StrStartsWith(Vec<String>, bool),
+    StrContains(Vec<String>, bool),
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum NumericConstraint {
+    NumEq(String),
+    NumGt(String),
+    NumGte(String),
+    NumLt(String),
+    NumLte(String),
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum DateConstraint {
+    DateAfter(String),
+    DateBefore(String),
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum SemverConstraint {
+    SemverEq(String),
+    SemverGt(String),
+    SemverLt(String),
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum ContainsConstraint {
+    In(Vec<String>),
+    NotIn(Vec<String>),
+}
+
+#[enum_dispatch]
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum ConstraintExpression {
+    NumericConstraint,
+    StrConstraint,
+    DateConstraint,
+    SemverConstraint,
+    ContainsConstraint,
+}
+
+#[enum_dispatch(ConstraintExpression)]
+pub trait EvaluatorConstructor {
+    fn yield_evaluator(self, getter: crate::strategy::Expr) -> Evaluate;
+}
+
+pub trait Expression: Fn(&Context) -> Option<&String> {
+    fn clone_boxed(&self) -> Box<dyn Expression + Send + Sync + 'static>;
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 // #[serde(deny_unknown_fields)]
 pub struct Constraint {
     #[serde(rename = "contextName")]
@@ -50,53 +107,53 @@ pub struct Constraint {
     pub expression: ConstraintExpression,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(tag = "operator")]
-// #[serde(deny_unknown_fields)]
-pub enum ConstraintExpression {
-    #[serde(rename = "IN")]
-    In { values: Vec<String> },
-    #[serde(rename = "NOT_IN")]
-    NotIn { values: Vec<String> },
-    #[serde(rename = "STR_ENDS_WITH")]
-    StrEndsWith {
-        values: Vec<String>,
-        #[serde(rename = "caseInsensitive")]
-        case_insensitive: Option<bool>,
-    },
-    #[serde(rename = "STR_STARTS_WITH")]
-    StrStartsWith {
-        values: Vec<String>,
-        #[serde(rename = "caseInsensitive")]
-        case_insensitive: Option<bool>,
-    },
-    #[serde(rename = "STR_CONTAINS")]
-    StrContains {
-        values: Vec<String>,
-        #[serde(rename = "caseInsensitive")]
-        case_insensitive: Option<bool>,
-    },
-    #[serde(rename = "NUM_EQ")]
-    NumEq { value: String },
-    #[serde(rename = "NUM_GT")]
-    NumGt { value: String },
-    #[serde(rename = "NUM_GTE")]
-    NumGte { value: String },
-    #[serde(rename = "NUM_LT")]
-    NumLt { value: String },
-    #[serde(rename = "NUM_LTE")]
-    NumLte { value: String },
-    #[serde(rename = "DATE_AFTER")]
-    DateAfter { value: String },
-    #[serde(rename = "DATE_BEFORE")]
-    DateBefore { value: String },
-    #[serde(rename = "SEMVER_EQ")]
-    SemverEq { value: String },
-    #[serde(rename = "SEMVER_GT")]
-    SemverGt { value: String },
-    #[serde(rename = "SEMVER_LT")]
-    SemverLt { value: String },
-}
+// #[derive(Clone, Serialize, Deserialize, Debug)]
+// #[serde(tag = "operator")]
+// // #[serde(deny_unknown_fields)]
+// pub enum ConstraintExpression {
+//     #[serde(rename = "IN")]
+//     In { values: Vec<String> },
+//     #[serde(rename = "NOT_IN")]
+//     NotIn { values: Vec<String> },
+//     #[serde(rename = "STR_ENDS_WITH")]
+//     StrEndsWith {
+//         values: Vec<String>,
+//         #[serde(rename = "caseInsensitive")]
+//         case_insensitive: Option<bool>,
+//     },
+//     #[serde(rename = "STR_STARTS_WITH")]
+//     StrStartsWith {
+//         values: Vec<String>,
+//         #[serde(rename = "caseInsensitive")]
+//         case_insensitive: Option<bool>,
+//     },
+//     #[serde(rename = "STR_CONTAINS")]
+//     StrContains {
+//         values: Vec<String>,
+//         #[serde(rename = "caseInsensitive")]
+//         case_insensitive: Option<bool>,
+//     },
+//     #[serde(rename = "NUM_EQ")]
+//     NumEq { value: String },
+//     #[serde(rename = "NUM_GT")]
+//     NumGt { value: String },
+//     #[serde(rename = "NUM_GTE")]
+//     NumGte { value: String },
+//     #[serde(rename = "NUM_LT")]
+//     NumLt { value: String },
+//     #[serde(rename = "NUM_LTE")]
+//     NumLte { value: String },
+//     #[serde(rename = "DATE_AFTER")]
+//     DateAfter { value: String },
+//     #[serde(rename = "DATE_BEFORE")]
+//     DateBefore { value: String },
+//     #[serde(rename = "SEMVER_EQ")]
+//     SemverEq { value: String },
+//     #[serde(rename = "SEMVER_GT")]
+//     SemverGt { value: String },
+//     #[serde(rename = "SEMVER_LT")]
+//     SemverLt { value: String },
+// }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 // #[serde(deny_unknown_fields)]
