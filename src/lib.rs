@@ -88,8 +88,15 @@
 //!  our public API. But there is a bug:
 //!  https://gitlab.com/KonradBorowski/enum-map/-/issues/22 so instead you must
 //!  match the version in your dependencies.
-
 #![warn(clippy::all)]
+
+#[cfg(not(any(
+    feature = "surf-client",
+    feature = "reqwest-client",
+    feature = "reqwest-client-rustls"
+)))]
+compile_error!("No HTTP client configured, enable one of the *-client features.");
+
 pub mod api;
 pub mod client;
 pub mod config;

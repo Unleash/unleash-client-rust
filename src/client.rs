@@ -18,7 +18,7 @@ use serde::Serialize;
 
 use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration};
 use crate::context::Context;
-use crate::http::HTTP;
+use crate::http::{Error, Response, HTTP};
 use crate::strategy;
 
 // ----------------- Variant
@@ -67,7 +67,7 @@ impl ClientBuilder {
         app_name: &str,
         instance_id: &str,
         authorization: Option<String>,
-    ) -> Result<Client<F>, http_client::Error>
+    ) -> Result<Client<F>, Error>
     where
         F: EnumArray<CachedFeature> + Debug + DeserializeOwned + Serialize,
     {
@@ -694,25 +694,14 @@ where
         self.polling.store(true, Ordering::Relaxed);
         loop {
             debug!("poll: retrieving features");
-            let res = self.http.get(&endpoint).recv_json().await;
-            if let Ok(res) = res {
-                let features: Features = res;
+            if let Ok(features) = self.get_features(&endpoint).await {
                 match self.memoize(features.features) {
                     Ok(None) => {}
                     Ok(Some(metrics)) => {
                         if !self.disable_metric_submission {
-                            let mut metrics_uploaded = false;
-                            let req = self.http.post(&metrics_endpoint);
-                            if let Ok(body) = http_types::Body::from_json(&metrics) {
-                                let res = req.body(body).await;
-                                if let Ok(res) = res {
-                                    if res.status().is_success() {
-                                        metrics_uploaded = true;
-                                        debug!("poll: uploaded feature metrics")
-                                    }
-                                }
-                            }
-                            if !metrics_uploaded {
+                            if self.upload_metrics(&metrics_endpoint, &metrics).await {
+                                debug!("poll: uploaded feature metrics");
+                            } else {
                                 warn!("poll: error uploading feature metrics");
                             }
                         }
@@ -724,9 +713,11 @@ where
             } else {
                 warn!("poll: failed to retrieve features");
             }
+
             let duration = Duration::from_millis(self.interval);
             debug!("poll: waiting {:?}", duration);
             Delay::new(duration).await;
+
             if !self.polling.load(Ordering::Relaxed) {
                 return;
             }
@@ -748,11 +739,7 @@ where
                 .collect(),
             ..Default::default()
         };
-        let res = self
-            .http
-            .post(Registration::endpoint(&self.api_url))
-            .body(http_types::Body::from_json(&registration)?)
-            .await?;
+        let res = self.do_registration(&registration).await?;
         if !res.status().is_success() {
             return Err(anyhow::anyhow!("Failed to register with unleash API server").into());
         }
@@ -778,6 +765,70 @@ where
                 }
             }
         }
+    }
+}
+
+#[cfg(feature = "surf")]
+impl<F> Client<F>
+where
+    F: EnumArray<CachedFeature> + Debug + DeserializeOwned + Serialize,
+{
+    async fn get_features(&self, endpoint: &str) -> Result<Features, Error> {
+        self.http.get(&endpoint).recv_json::<Features>().await
+    }
+
+    async fn upload_metrics(&self, endpoint: &str, metrics: &Metrics) -> bool {
+        let req = self.http.post(endpoint);
+        if let Ok(req) = req.body_json(metrics) {
+            if let Ok(res) = req.await {
+                if res.status().is_success() {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    async fn do_registration(&self, registration: &Registration) -> Result<Response, Error> {
+        self.http
+            .post(&Registration::endpoint(&self.api_url))
+            .body_json(&registration)?
+            .await
+    }
+}
+
+#[cfg(feature = "reqwest")]
+impl<F> Client<F>
+where
+    F: EnumArray<CachedFeature> + Debug + DeserializeOwned + Serialize,
+{
+    async fn get_features(&self, endpoint: &str) -> Result<Features, Error> {
+        self.http
+            .get(&endpoint)
+            .send()
+            .await?
+            .json::<Features>()
+            .await
+    }
+
+    async fn upload_metrics(&self, endpoint: &str, metrics: &Metrics) -> bool {
+        let req = self.http.post(endpoint).json(metrics);
+        if let Ok(res) = req.send().await {
+            if res.status().is_success() {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    async fn do_registration(&self, registration: &Registration) -> Result<Response, Error> {
+        self.http
+            .post(&Registration::endpoint(&self.api_url))
+            .json(&registration)
+            .send()
+            .await
     }
 }
 
