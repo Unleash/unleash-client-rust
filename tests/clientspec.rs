@@ -93,7 +93,7 @@ mod tests {
             let suite_content = fs::read(spec_dir.join(suite_name))?;
             let suite: Suite = serde_json::from_slice(&suite_content)?;
 
-            assert_eq!(1, suite.state.version);
+            assert!(2 >= suite.state.version);
 
             #[allow(non_camel_case_types)]
             #[derive(Debug, Deserialize, Serialize, Enum, Clone)]

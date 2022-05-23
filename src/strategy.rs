@@ -1,17 +1,25 @@
 // Copyright 2020 Cognite AS
 //! <https://docs.getunleash.io/user_guide/activation_strategy>
+use chrono::{DateTime, FixedOffset};
+use enum_dispatch::enum_dispatch;
 use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
 use std::hash::BuildHasher;
 use std::io::Cursor;
 use std::net::IpAddr;
+use std::num::ParseFloatError;
+use std::str::FromStr;
 
 use ipnet::IpNet;
 use log::{trace, warn};
 use murmur3::murmur3_32;
 use rand::Rng;
+use semver::Version;
 
-use crate::api::{Constraint, ConstraintExpression};
+use crate::api::{
+    Constraint, ConstraintExpression, ContainsConstraint, DateConstraint, EvaluatorConstructor,
+    NumericConstraint, SemverConstraint, StrConstraint,
+};
 use crate::context::Context;
 
 /// Memoise feature state for a strategy.
@@ -275,30 +283,232 @@ pub fn hostname<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) 
 }
 
 /// returns true if the strategy should be delegated to, false to disable
-fn _compile_constraint_string<F>(expression: ConstraintExpression, getter: F) -> Evaluate
+fn _compile_constraint_string<F>(
+    expression: ConstraintExpression,
+    inverted: Option<bool>,
+    getter: F,
+) -> Evaluate
 where
     F: Fn(&Context) -> Option<&String> + Clone + Sync + Send + 'static,
 {
-    match &expression {
-        ConstraintExpression::In(values) => {
-            let as_set: HashSet<String> = values.iter().cloned().collect();
-            Box::new(move |context: &Context| {
-                getter(context).map(|v| as_set.contains(v)).unwrap_or(false)
-            })
-        }
-        ConstraintExpression::NotIn(values) => {
-            if values.is_empty() {
-                Box::new(|_| true)
-            } else {
-                let as_set: HashSet<String> = values.iter().cloned().collect();
-                Box::new(move |context: &Context| {
-                    getter(context)
-                        .map(|v| !as_set.contains(v))
-                        .unwrap_or(false)
-                })
-            }
-        }
-    }
+    let evaluator = expression.yield_evaluator(Box::new(getter.clone()));
+    Box::new(move |context: &Context| -> bool { evaluator(context) })
+
+    // match &expression {
+    //     ConstraintExpression::In { values } => {
+    //         let as_set: HashSet<String> = values.iter().cloned().collect();
+    //         let evaluator = constraint.yield_evaluator(Box::new(getter.clone()));
+    //         Box::new(move |context: &Context| {
+    //             // evaluator(context);
+    //             // let t = Box::new(evaluator(getter(context)));
+    //             let value = getter(context).map(|v| as_set.contains(v)).unwrap_or(false);
+    //             _handle_inversion(&value, &inverted)
+    //         })
+    //     }
+    //     ConstraintExpression::NotIn { values } => {
+    //         if values.is_empty() {
+    //             Box::new(move |_| _handle_inversion(&true, &inverted))
+    //         } else {
+    //             let as_set: HashSet<String> = values.iter().cloned().collect();
+    //             Box::new(move |context: &Context| {
+    //                 let value = getter(context)
+    //                     .map(|v| !as_set.contains(v))
+    //                     .unwrap_or(false);
+    //                 _handle_inversion(&value, &inverted)
+    //             })
+    //         }
+    //     }
+    //     ConstraintExpression::StrStartsWith {
+    //         values,
+    //         case_insensitive,
+    //     } => {
+    //         if values.is_empty() {
+    //             Box::new(move |_| _handle_inversion(&false, &inverted))
+    //         } else {
+    //             let mut as_vec: Vec<String> = values.to_vec();
+    //             let case_insensitive = case_insensitive.unwrap_or(false);
+    //             if case_insensitive {
+    //                 as_vec = as_vec.iter_mut().map(|x| x.to_lowercase()).collect();
+    //             };
+    //             Box::new(move |context: &Context| {
+    //                 let value = getter(context)
+    //                     .map(|v| {
+    //                         as_vec.iter().any(|x| {
+    //                             if case_insensitive {
+    //                                 v.to_lowercase().starts_with(x)
+    //                             } else {
+    //                                 v.starts_with(x)
+    //                             }
+    //                         })
+    //                     })
+    //                     .unwrap_or(false);
+    //                 _handle_inversion(&value, &inverted)
+    //             })
+    //         }
+    //     }
+    //     ConstraintExpression::StrEndsWith {
+    //         values,
+    //         case_insensitive,
+    //     } => {
+    //         if values.is_empty() {
+    //             Box::new(move |_| _handle_inversion(&false, &inverted))
+    //         } else {
+    //             let mut as_vec: Vec<String> = values.to_vec();
+    //             let case_insensitive = case_insensitive.unwrap_or(false);
+    //             if case_insensitive {
+    //                 as_vec = as_vec.iter_mut().map(|x| x.to_lowercase()).collect();
+    //             };
+    //             Box::new(move |context: &Context| {
+    //                 let value = getter(context)
+    //                     .map(|v| {
+    //                         as_vec.iter().any(|x| {
+    //                             if case_insensitive {
+    //                                 v.to_lowercase().ends_with(x)
+    //                             } else {
+    //                                 v.ends_with(x)
+    //                             }
+    //                         })
+    //                     })
+    //                     .unwrap_or(false);
+    //                 _handle_inversion(&value, &inverted)
+    //             })
+    //         }
+    //     }
+    //     ConstraintExpression::StrContains {
+    //         values,
+    //         case_insensitive,
+    //     } => {
+    //         if values.is_empty() {
+    //             Box::new(|_| false)
+    //         } else {
+    //             let mut as_vec: Vec<String> = values.to_vec();
+    //             let case_insensitive = case_insensitive.unwrap_or(false);
+    //             if case_insensitive {
+    //                 as_vec = as_vec.iter_mut().map(|x| x.to_lowercase()).collect();
+    //             };
+    //             Box::new(move |context: &Context| {
+    //                 let value = getter(context)
+    //                     .map(|v| {
+    //                         as_vec.iter().any(|x| {
+    //                             if case_insensitive {
+    //                                 v.to_lowercase().contains(x)
+    //                             } else {
+    //                                 v.contains(x)
+    //                             }
+    //                         })
+    //                     })
+    //                     .unwrap_or(false);
+    //                 _handle_inversion(&value, &inverted)
+    //             })
+    //         }
+    //     }
+    //     ConstraintExpression::NumEq { value } => match value.parse::<f64>() {
+    //         Ok(parsed_value) => Box::new(move |context: &Context| {
+    //             let value = getter(context)
+    //                 .map(|v| {
+    //                     v.parse::<f64>()
+    //                         .map(|x| (x - parsed_value).abs() < f64::EPSILON)
+    //                         .unwrap_or(false)
+    //                 })
+    //                 .unwrap_or(false);
+    //             _handle_inversion(&value, &inverted)
+    //         }),
+    //         Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
+    //     },
+    //     ConstraintExpression::NumGt { value } => match value.parse::<f64>() {
+    //         Ok(parsed_value) => Box::new(move |context: &Context| {
+    //             let value = _evaluate_ordinal_constraint(
+    //                 getter(context),
+    //                 &parsed_value,
+    //                 |context_value, constraint_value| context_value < constraint_value,
+    //             );
+    //             _handle_inversion(&value, &inverted)
+    //         }),
+    //         Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
+    //     },
+    //     ConstraintExpression::NumGte { value } => match value.parse::<f64>() {
+    //         Ok(parsed_value) => Box::new(move |context: &Context| {
+    //             let value = _evaluate_ordinal_constraint(
+    //                 getter(context),
+    //                 &parsed_value,
+    //                 |context_value, constraint_value| context_value <= constraint_value,
+    //             );
+    //             _handle_inversion(&value, &inverted)
+    //         }),
+    //         Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
+    //     },
+    //     ConstraintExpression::NumLt { value } => match value.parse::<f64>() {
+    //         Ok(parsed_value) => Box::new(move |context: &Context| {
+    //             let value = _evaluate_ordinal_constraint(
+    //                 getter(context),
+    //                 &parsed_value,
+    //                 |context_value, constraint_value| context_value > constraint_value,
+    //             );
+    //             _handle_inversion(&value, &inverted)
+    //         }),
+    //         Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
+    //     },
+    //     ConstraintExpression::NumLte { value } => match value.parse::<f64>() {
+    //         Ok(parsed_value) => Box::new(move |context: &Context| {
+    //             let value = _evaluate_ordinal_constraint(
+    //                 getter(context),
+    //                 &parsed_value,
+    //                 |context_value, constraint_value| context_value >= constraint_value,
+    //             );
+    //             _handle_inversion(&value, &inverted)
+    //         }),
+    //         Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
+    //     },
+    //     ConstraintExpression::DateAfter { value } => match DateTime::parse_from_rfc3339(value) {
+    //         Ok(parsed_value) => Box::new(move |context: &Context| {
+    //             let value = _evaluate_ordinal_constraint(
+    //                 getter(context),
+    //                 &parsed_value,
+    //                 |context_value, constraint_value| context_value < constraint_value,
+    //             );
+    //             _handle_inversion(&value, &inverted)
+    //         }),
+    //         Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
+    //     },
+    //     ConstraintExpression::DateBefore { value } => match DateTime::parse_from_rfc3339(value) {
+    //         Ok(parsed_value) => Box::new(move |context: &Context| {
+    //             let value = _evaluate_ordinal_constraint(
+    //                 getter(context),
+    //                 &parsed_value,
+    //                 |context_value, constraint_value| context_value > constraint_value,
+    //             );
+    //             _handle_inversion(&value, &inverted)
+    //         }),
+    //         Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
+    //     },
+    //     ConstraintExpression::SemverEq { value } => match value.parse::<Version>() {
+    //         Ok(parsed_value) => Box::new(move |context: &Context| {
+    //             let value = _evaluate_ordinal_constraint(
+    //                 getter(context),
+    //                 &parsed_value,
+    //                 |context_value, constraint_value| context_value == constraint_value,
+    //             );
+    //             _handle_inversion(&value, &inverted)
+    //         }),
+    //         Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
+    //     },
+    //     ConstraintExpression::SemverGt { value } => match value.parse::<Version>() {
+    //         Ok(parsed_value) => Box::new(move |context: &Context| {
+    //             getter(context)
+    //                 .map(|v| Version::parse(v).map(|x| x > parsed_value).unwrap_or(false))
+    //                 .unwrap_or(false)
+    //         }),
+    //         Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
+    //     },
+    //     ConstraintExpression::SemverLt { value } => match value.parse::<Version>() {
+    //         Ok(parsed_value) => Box::new(move |context: &Context| {
+    //             getter(context)
+    //                 .map(|v| Version::parse(v).map(|x| x < parsed_value).unwrap_or(false))
+    //                 .unwrap_or(false)
+    //         }),
+    //         Err(_) => Box::new(move |_| _handle_inversion(&false, &inverted)),
+    //     },
+    // }
 }
 
 fn _ip_to_vec(ips: &[String]) -> Vec<IpNet> {
@@ -314,49 +524,241 @@ fn _ip_to_vec(ips: &[String]) -> Vec<IpNet> {
     result
 }
 
-/// returns true if the strategy should be delegated to, false to disable
-fn _compile_constraint_host<F>(expression: ConstraintExpression, getter: F) -> Evaluate
-where
-    F: Fn(&Context) -> Option<&crate::context::IPAddress> + Clone + Sync + Send + 'static,
-{
-    match &expression {
-        ConstraintExpression::In(values) => {
-            let ips = _ip_to_vec(values);
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .map(|remote_address| {
-                        for ip in &ips {
-                            if ip.contains(&remote_address.0) {
-                                return true;
-                            }
-                        }
-                        false
-                    })
-                    .unwrap_or(false)
-            })
+fn _handle_inversion(value: &bool, inverted: &Option<bool>) -> bool {
+    if inverted.unwrap_or(false) {
+        !value
+    } else {
+        *value
+    }
+}
+
+impl EvaluatorConstructor for NumericConstraint {
+    fn yield_evaluator(self, getter: Expr) -> Evaluate {
+        match self {
+            NumericConstraint::NumEq(constraint_value) => Box::new(move |context: &Context| {
+                apply(&constraint_value, getter(context), |x: f64, y| -> bool {
+                    (x - y).abs() < f64::EPSILON
+                })
+            }),
+            NumericConstraint::NumGt(constraint_value) => Box::new(move |context: &Context| {
+                apply(&constraint_value, getter(context), |x: f64, y| -> bool {
+                    x < y
+                })
+            }),
+            NumericConstraint::NumGte(constraint_value) => Box::new(move |context: &Context| {
+                apply(&constraint_value, getter(context), |x: f64, y| -> bool {
+                    x <= y
+                })
+            }),
+            NumericConstraint::NumLt(constraint_value) => Box::new(move |context: &Context| {
+                apply(&constraint_value, getter(context), |x: f64, y| -> bool {
+                    x > y
+                })
+            }),
+            NumericConstraint::NumLte(constraint_value) => Box::new(move |context: &Context| {
+                apply(&constraint_value, getter(context), |x: f64, y| -> bool {
+                    x >= y
+                })
+            }),
         }
-        ConstraintExpression::NotIn(values) => {
-            if values.is_empty() {
-                Box::new(|_| false)
-            } else {
-                let ips = _ip_to_vec(values);
+    }
+}
+
+impl EvaluatorConstructor for SemverConstraint {
+    fn yield_evaluator(self, getter: Expr) -> Evaluate {
+        match self {
+            SemverConstraint::SemverEq(constraint_value) => Box::new(move |context: &Context| {
+                apply(
+                    &constraint_value,
+                    getter(context),
+                    |x: Version, y| -> bool { x == y },
+                )
+            }),
+            SemverConstraint::SemverGt(constraint_value) => Box::new(move |context: &Context| {
+                apply(
+                    &constraint_value,
+                    getter(context),
+                    |x: Version, y| -> bool { x < y },
+                )
+            }),
+            SemverConstraint::SemverLt(constraint_value) => Box::new(move |context: &Context| {
+                apply(
+                    &constraint_value,
+                    getter(context),
+                    |x: Version, y| -> bool { x > y },
+                )
+            }),
+        }
+    }
+}
+
+impl EvaluatorConstructor for DateConstraint {
+    fn yield_evaluator(self, getter: Expr) -> Evaluate {
+        match self {
+            DateConstraint::DateAfter(constraint_value) => Box::new(move |context: &Context| {
+                apply(
+                    &constraint_value,
+                    getter(context),
+                    |x: DateTime<FixedOffset>, y| -> bool { x < y },
+                )
+            }),
+            DateConstraint::DateBefore(constraint_value) => Box::new(move |context: &Context| {
+                apply(
+                    &constraint_value,
+                    getter(context),
+                    |x: DateTime<FixedOffset>, y| -> bool { x > y },
+                )
+            }),
+        }
+    }
+}
+
+impl EvaluatorConstructor for StrConstraint {
+    fn yield_evaluator(self, getter: Expr) -> Evaluate {
+        match self {
+            StrConstraint::StrEndsWith(_, _) => todo!(),
+            StrConstraint::StrStartsWith(values, case_insensitive) => {
+                let mut as_vec: Vec<String> = values.to_vec();
+                if case_insensitive {
+                    as_vec = as_vec.iter_mut().map(|x| x.to_lowercase()).collect();
+                };
                 Box::new(move |context: &Context| {
                     getter(context)
-                        .map(|remote_address| {
-                            if ips.is_empty() {
-                                return false;
-                            }
-                            for ip in &ips {
-                                if ip.contains(&remote_address.0) {
-                                    return false;
+                        .map(|v| {
+                            as_vec.iter().any(|x| {
+                                if case_insensitive {
+                                    v.to_lowercase().starts_with(x)
+                                } else {
+                                    v.starts_with(x)
                                 }
-                            }
-                            true
+                            })
                         })
                         .unwrap_or(false)
                 })
             }
+            StrConstraint::StrContains(_, _) => todo!(),
         }
+    }
+}
+
+impl EvaluatorConstructor for ContainsConstraint {
+    fn yield_evaluator(self, getter: Expr) -> Evaluate {
+        match self {
+            ContainsConstraint::In(_) => todo!(),
+            ContainsConstraint::NotIn(_) => todo!(),
+        }
+    }
+}
+
+fn apply<T, F>(s: &String, t: Option<&String>, comparator: F) -> bool
+where
+    T: FromStr,
+    F: Fn(T, T) -> bool,
+{
+    if let Some(t) = t {
+        let s = s.parse::<T>().ok();
+        let t = t.parse::<T>().ok();
+        match s.zip(t) {
+            Some((s, t)) => comparator(s, t),
+            None => false,
+        }
+    } else {
+        false
+    }
+}
+
+pub trait Expression: Fn(&Context) -> Option<&String> {
+    fn clone_boxed(&self) -> Box<dyn Expression + Send + Sync + 'static>;
+}
+
+impl<T> Expression for T
+where
+    T: 'static + Clone + Sync + Send + Fn(&Context) -> Option<&String>,
+{
+    fn clone_boxed(&self) -> Box<dyn Expression + Send + Sync + 'static> {
+        Box::new(T::clone(self))
+    }
+}
+
+impl Clone for Box<dyn Expression + Send + Sync + 'static> {
+    fn clone(&self) -> Self {
+        self.as_ref().clone_boxed()
+    }
+}
+
+pub type Expr = Box<dyn Expression + Send + Sync + 'static>;
+
+fn _evaluate_ordinal_constraint<F, T>(
+    context_value: Option<&String>,
+    constraint_value: &T,
+    comparator: F,
+) -> bool
+where
+    T: PartialOrd + FromStr,
+    F: Fn(&T, &T) -> bool,
+{
+    context_value
+        .map(|v| {
+            v.parse::<T>()
+                .map(|x| comparator(constraint_value, &x))
+                .unwrap_or(false)
+        })
+        .unwrap_or(false)
+}
+
+/// returns true if the strategy should be delegated to, false to disable
+fn _compile_constraint_host<F>(
+    expression: ConstraintExpression,
+    inverted: Option<bool>,
+    getter: F,
+) -> Evaluate
+where
+    F: Fn(&Context) -> Option<&crate::context::IPAddress> + Clone + Sync + Send + 'static,
+{
+    match &expression {
+        ConstraintExpression::ContainsConstraint(child) => match child {
+            ContainsConstraint::In(values) => {
+                let ips = _ip_to_vec(values);
+                Box::new(move |context: &Context| {
+                    let value = getter(context)
+                        .map(|remote_address| {
+                            for ip in &ips {
+                                if ip.contains(&remote_address.0) {
+                                    return true;
+                                }
+                            }
+                            false
+                        })
+                        .unwrap_or(false);
+                    _handle_inversion(&value, &inverted)
+                })
+            }
+            ContainsConstraint::NotIn(values) => {
+                if values.is_empty() {
+                    Box::new(|_| false)
+                } else {
+                    let ips = _ip_to_vec(values);
+                    Box::new(move |context: &Context| {
+                        let value = getter(context)
+                            .map(|remote_address| {
+                                if ips.is_empty() {
+                                    return false;
+                                }
+                                for ip in &ips {
+                                    if ip.contains(&remote_address.0) {
+                                        return false;
+                                    }
+                                }
+                                true
+                            })
+                            .unwrap_or(false);
+                        _handle_inversion(&value, &inverted)
+                    })
+                }
+            }
+        },
+        // New operators aren't defined for an ip
+        _ => Box::new(move |_: &Context| false),
     }
 }
 
@@ -364,24 +766,31 @@ fn _compile_constraints(constraints: Vec<Constraint>) -> Vec<Evaluate> {
     constraints
         .into_iter()
         .map(|constraint| {
-            let (context_name, expression) = (constraint.context_name, constraint.expression);
+            let (context_name, expression, inverted) = (
+                constraint.context_name,
+                constraint.expression,
+                constraint.inverted,
+            );
             match context_name.as_str() {
-                "appName" => {
-                    _compile_constraint_string(expression, |context| Some(&context.app_name))
-                }
-                "environment" => {
-                    _compile_constraint_string(expression, |context| Some(&context.environment))
-                }
-                "remoteAddress" => {
-                    _compile_constraint_host(expression, |context| context.remote_address.as_ref())
-                }
-                "sessionId" => {
-                    _compile_constraint_string(expression, |context| context.session_id.as_ref())
-                }
-                "userId" => {
-                    _compile_constraint_string(expression, |context| context.user_id.as_ref())
-                }
-                _ => _compile_constraint_string(expression, move |context| {
+                "appName" => _compile_constraint_string(expression, inverted, |context| {
+                    Some(&context.app_name)
+                }),
+                "currentTime" => _compile_constraint_string(expression, inverted, |context| {
+                    Some(&context.current_time)
+                }),
+                "environment" => _compile_constraint_string(expression, inverted, |context| {
+                    Some(&context.environment)
+                }),
+                "remoteAddress" => _compile_constraint_host(expression, inverted, |context| {
+                    context.remote_address.as_ref()
+                }),
+                "sessionId" => _compile_constraint_string(expression, inverted, |context| {
+                    context.session_id.as_ref()
+                }),
+                "userId" => _compile_constraint_string(expression, inverted, |context| {
+                    context.user_id.as_ref()
+                }),
+                _ => _compile_constraint_string(expression, inverted, move |context| {
                     context.properties.get(&context_name)
                 }),
             }
@@ -431,6 +840,7 @@ fn _parse_ip(ip: &str) -> Result<IpNet, std::net::AddrParseError> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::collections::hash_map::HashMap;
     use std::default::Default;
 
@@ -443,195 +853,1138 @@ mod tests {
         Some(IPAddress(addr.parse().unwrap()))
     }
 
+    // #[test]
+    // fn converts_constraint_type() -> Result<(), serde_json::Error> {
+    //     let constraint: NestedConstraintExpression = NumericConstraint::NumEq("7".into()).into();
+    //     let evaluator = constraint.yield_evaluator(Box::new(move |context: &Context| {
+    //         Some(&context.environment)
+    //     }));
+
+    //     let context = Context {
+    //         environment: "7".into(),
+    //         ..Default::default()
+    //     };
+
+    //     assert!(evaluator(&context));
+
+    //     let context = Context {
+    //         environment: "8".into(),
+    //         ..Default::default()
+    //     };
+
+    //     assert!(!evaluator(&context));
+
+    //     Ok(())
+    // }
+
+    // #[test]
+    // fn test_constrain() {
+    //     // Without constraints, things should just pass through
+    //     let context = Context::default();
+    //     assert!(super::constrain(None, &super::default, None)(&context));
+
+    //     // An empty constraint list acts like a missing one
+    //     let context = Context::default();
+    //     assert!(super::constrain(Some(vec![]), &super::default, None)(
+    //         &context
+    //     ));
+
+    //     // An empty constraint gets disabled
+    //     let context = Context {
+    //         environment: "development".into(),
+    //         ..Default::default()
+    //     };
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::In { values: vec![] },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     // A mismatched constraint acts like an empty constraint
+    //     let context = Context {
+    //         environment: "production".into(),
+    //         ..Default::default()
+    //     };
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::In {
+    //                 values: vec!["development".into()],
+    //             },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     // a matched Not In acts like an empty constraint
+    //     let context = Context {
+    //         environment: "development".into(),
+    //         ..Default::default()
+    //     };
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::NotIn {
+    //                 values: vec!["development".into()]
+    //             },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     // a matched In in either first or second (etc) places delegates
+    //     let context = Context {
+    //         environment: "development".into(),
+    //         ..Default::default()
+    //     };
+    //     assert!(super::constrain(
+    //         Some(vec![Constraint {
+    //             inverted: Some(false),
+    //             context_name: "environment".into(),
+    //             expression: ConstraintExpression::In {
+    //                 values: vec!["development".into()],
+    //             },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+    //     // second place
+    //     let context = Context {
+    //         environment: "development".into(),
+    //         ..Default::default()
+    //     };
+    //     assert!(super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::In {
+    //                 values: vec!["staging".into(), "development".into()],
+    //             },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     // a not matched Not In across 1st and second etc delegates
+    //     let context = Context {
+    //         environment: "production".into(),
+    //         ..Default::default()
+    //     };
+    //     assert!(super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::NotIn {
+    //                 values: vec!["staging".into(), "development".into()],
+    //             },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     // Context keys can be chosen by the context_name field:
+    //     // .environment is used above.
+    //     // .user_id
+    //     let context = Context {
+    //         user_id: Some("fred".into()),
+    //         ..Default::default()
+    //     };
+    //     assert!(super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "userId".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::In {
+    //                 values: vec!["fred".into()]
+    //             },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     // .session_id
+    //     let context = Context {
+    //         session_id: Some("qwerty".into()),
+    //         ..Default::default()
+    //     };
+    //     assert!(super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "sessionId".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::In {
+    //                 values: vec!["qwerty".into()],
+    //             },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     // .remote_address
+    //     let context = Context {
+    //         remote_address: parse_ip("10.20.30.40"),
+    //         ..Default::default()
+    //     };
+    //     assert!(super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "remoteAddress".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::In {
+    //                 values: vec!["10.0.0.0/8".into()],
+    //             },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+    //     let context = Context {
+    //         remote_address: parse_ip("1.2.3.4"),
+    //         ..Default::default()
+    //     };
+    //     assert!(super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "remoteAddress".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::NotIn {
+    //                 values: vec!["10.0.0.0/8".into()],
+    //             },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     // multiple constraints are ANDed together
+    //     let context = Context {
+    //         environment: "development".into(),
+    //         ..Default::default()
+    //     };
+    //     // true ^ true => true
+    //     assert!(super::constrain(
+    //         Some(vec![
+    //             Constraint {
+    //                 context_name: "environment".into(),
+    //                 inverted: Some(false),
+    //                 expression: ConstraintExpression::In {
+    //                     values: vec!["development".into()],
+    //                 },
+    //             },
+    //             Constraint {
+    //                 context_name: "environment".into(),
+    //                 inverted: Some(false),
+    //                 expression: ConstraintExpression::In {
+    //                     values: vec!["development".into()],
+    //                 },
+    //             },
+    //         ]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+    //     assert!(!super::constrain(
+    //         Some(vec![
+    //             Constraint {
+    //                 context_name: "environment".into(),
+    //                 inverted: Some(false),
+    //                 expression: ConstraintExpression::In {
+    //                     values: vec!["development".into()],
+    //                 },
+    //             },
+    //             Constraint {
+    //                 inverted: Some(false),
+    //                 context_name: "environment".into(),
+    //                 expression: ConstraintExpression::In { values: vec![] },
+    //             }
+    //         ]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+    // }
+
     #[test]
-    fn test_constrain() {
-        // Without constraints, things should just pass through
-        let context = Context::default();
-        assert!(super::constrain(None, &super::default, None)(&context));
-
-        // An empty constraint list acts like a missing one
-        let context = Context::default();
-        assert!(super::constrain(Some(vec![]), &super::default, None)(
-            &context
-        ));
-
-        // An empty constraint gets disabled
+    fn test_str_constrain() {
         let context = Context {
             environment: "development".into(),
             ..Default::default()
         };
-        assert!(!super::constrain(
+        // starts with matches string start
+        assert!(super::constrain(
             Some(vec![Constraint {
-                context_name: "".into(),
-                expression: ConstraintExpression::In(vec![]),
-            }]),
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: StrConstraint::StrStartsWith(vec!["dev".into()], false,).into(),
+            },]),
             &super::default,
             None
         )(&context));
 
-        // A mismatched constraint acts like an empty constraint
-        let context = Context {
-            environment: "production".into(),
-            ..Default::default()
-        };
+        // starts with does not match string not present
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::In(vec!["development".into()]),
-            }]),
+                inverted: Some(false),
+                expression: StrConstraint::StrStartsWith(vec!["production".into()], false,).into(),
+            },]),
             &super::default,
             None
         )(&context));
 
-        // a matched Not In acts like an empty constraint
-        let context = Context {
-            environment: "development".into(),
-            ..Default::default()
-        };
+        // ends with matches tail of string
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: StrConstraint::StrEndsWith(vec!["ent".into()], false,).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // ends with does not match string not present
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::NotIn(vec!["development".into()]),
-            }]),
+                inverted: Some(false),
+                expression: StrConstraint::StrEndsWith(vec!["prod".into()], false,).into(),
+            },]),
             &super::default,
             None
         )(&context));
 
-        // a matched In in either first or second (etc) places delegates
+        // // contains matches whole string
+        // assert!(super::constrain(
+        //     Some(vec![Constraint {
+        //         context_name: "environment".into(),
+        //         inverted: Some(false),
+        //         expression: ConstraintExpression::StrContains {
+        //             values: vec!["development".into()],
+        //             case_insensitive: Some(false),
+        //         },
+        //     },]),
+        //     &super::default,
+        //     None
+        // )(&context));
+
+        // // contains matches partial string
+        // assert!(super::constrain(
+        //     Some(vec![Constraint {
+        //         context_name: "environment".into(),
+        //         inverted: Some(false),
+        //         expression: ConstraintExpression::StrContains {
+        //             values: vec!["elop".into()],
+        //             case_insensitive: Some(false),
+        //         },
+        //     },]),
+        //     &super::default,
+        //     None
+        // )(&context));
+
+        // // contains does not match string not present
+        // assert!(!super::constrain(
+        //     Some(vec![Constraint {
+        //         context_name: "environment".into(),
+        //         inverted: Some(false),
+        //         expression: ConstraintExpression::StrContains {
+        //             values: vec!["production".into()],
+        //             case_insensitive: Some(false),
+        //         },
+        //     },]),
+        //     &super::default,
+        //     None
+        // )(&context));
+    }
+
+    #[test]
+    fn test_num_eq_constrain() {
+        // Check that this works against floating point contexts
         let context = Context {
-            environment: "development".into(),
+            environment: "7.0".into(),
             ..Default::default()
         };
+
+        // eq matches floating point
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::In(vec!["development".into()]),
-            }]),
-            &super::default,
-            None
-        )(&context));
-        // second place
-        let context = Context {
-            environment: "development".into(),
-            ..Default::default()
-        };
-        assert!(super::constrain(
-            Some(vec![Constraint {
-                context_name: "environment".into(),
-                expression: ConstraintExpression::In(vec!["staging".into(), "development".into()]),
-            }]),
+                inverted: Some(false),
+                expression: NumericConstraint::NumEq("7.0".into()).into(),
+            },]),
             &super::default,
             None
         )(&context));
 
-        // a not matched Not In across 1st and second etc delegates
-        let context = Context {
-            environment: "production".into(),
-            ..Default::default()
-        };
-        assert!(super::constrain(
-            Some(vec![Constraint {
-                context_name: "environment".into(),
-                expression: ConstraintExpression::NotIn(vec![
-                    "staging".into(),
-                    "development".into()
-                ]),
-            }]),
-            &super::default,
-            None
-        )(&context));
-
-        // Context keys can be chosen by the context_name field:
-        // .environment is used above.
-        // .user_id
-        let context = Context {
-            user_id: Some("fred".into()),
-            ..Default::default()
-        };
-        assert!(super::constrain(
-            Some(vec![Constraint {
-                context_name: "userId".into(),
-                expression: ConstraintExpression::In(vec!["fred".into()]),
-            }]),
-            &super::default,
-            None
-        )(&context));
-
-        // .session_id
-        let context = Context {
-            session_id: Some("qwerty".into()),
-            ..Default::default()
-        };
-        assert!(super::constrain(
-            Some(vec![Constraint {
-                context_name: "sessionId".into(),
-                expression: ConstraintExpression::In(vec!["qwerty".into()]),
-            }]),
-            &super::default,
-            None
-        )(&context));
-
-        // .remote_address
-        let context = Context {
-            remote_address: parse_ip("10.20.30.40"),
-            ..Default::default()
-        };
-        assert!(super::constrain(
-            Some(vec![Constraint {
-                context_name: "remoteAddress".into(),
-                expression: ConstraintExpression::In(vec!["10.0.0.0/8".into()]),
-            }]),
-            &super::default,
-            None
-        )(&context));
-        let context = Context {
-            remote_address: parse_ip("1.2.3.4"),
-            ..Default::default()
-        };
-        assert!(super::constrain(
-            Some(vec![Constraint {
-                context_name: "remoteAddress".into(),
-                expression: ConstraintExpression::NotIn(vec!["10.0.0.0/8".into()]),
-            }]),
-            &super::default,
-            None
-        )(&context));
-
-        // multiple constraints are ANDed together
-        let context = Context {
-            environment: "development".into(),
-            ..Default::default()
-        };
-        // true ^ true => true
-        assert!(super::constrain(
-            Some(vec![
-                Constraint {
-                    context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec!["development".into()]),
-                },
-                Constraint {
-                    context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec!["development".into()]),
-                },
-            ]),
-            &super::default,
-            None
-        )(&context));
+        // eq does not match against different value
         assert!(!super::constrain(
-            Some(vec![
-                Constraint {
-                    context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec!["development".into()]),
-                },
-                Constraint {
-                    context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec![]),
-                }
-            ]),
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumEq("3.141".into()).into()
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // // eq matches against integer
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumEq("7".into()).into()
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // // eq returns false for unparsable input
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumEq("NaN".into()).into()
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // // Check that this works against integer contexts
+        let context = Context {
+            environment: "7".into(),
+            ..Default::default()
+        };
+
+        // eq matches against floating point
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumEq("7.0".into()).into()
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // eq matches against integer
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumEq("7".into()).into()
+            },]),
             &super::default,
             None
         )(&context));
     }
+
+    #[test]
+    fn test_num_gt_constrain() {
+        let context = Context {
+            environment: "14.0".into(),
+            ..Default::default()
+        };
+
+        // gt does not match against lower value
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumGt("17.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        //     // gt does not match against exact value
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumGt("14.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // gt matches against a higher value
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumGt("10.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        //     // gt returns false for unparsable value
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumGt("NotANumber".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_num_lt_constrain() {
+        let context = Context {
+            environment: "14.0".into(),
+            ..Default::default()
+        };
+
+        // lt matches a lower value
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumLt("17.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // lt does not match an exact value
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumLt("14.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // lt does not match a higher value
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumLt("10.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // lt returns false for unparsable input
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumLt("NotANumber".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_num_gte_constrain() {
+        let context = Context {
+            environment: "14.0".into(),
+            ..Default::default()
+        };
+
+        // gte does not match a lower value
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                inverted: Some(false),
+                context_name: "environment".into(),
+                expression: NumericConstraint::NumGte("17.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // gte matches an exact value
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                inverted: Some(false),
+                context_name: "environment".into(),
+                expression: NumericConstraint::NumGte("14.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // gte matches a higher value
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                inverted: Some(false),
+                context_name: "environment".into(),
+                expression: NumericConstraint::NumGte("10.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // gte returns false for unparsable input
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                inverted: Some(false),
+                context_name: "environment".into(),
+                expression: NumericConstraint::NumGte("NotANumber".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_num_lte_constrain() {
+        let context = Context {
+            environment: "14.0".into(),
+            ..Default::default()
+        };
+
+        // lte matches a lower value
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                inverted: Some(false),
+                context_name: "environment".into(),
+                expression: NumericConstraint::NumLte("17.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // lte matches an exact value
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                inverted: Some(false),
+                context_name: "environment".into(),
+                expression: NumericConstraint::NumLte("14.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // lte does not match a higher value
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumLte("10.0".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        // lte returns false for unparsable input
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: NumericConstraint::NumLte("NotANumber".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_semver_eq() {
+        let mut props = HashMap::new();
+        props.insert("version".into(), "1.2.2".into());
+        let context = Context {
+            properties: props,
+            ..Default::default()
+        };
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverEq("1.2.2".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverEq("2.7.1".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverEq("NotASemver".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_semver_lt() {
+        let context = Context {
+            environment: "3.1.4-beta.2".into(),
+            ..Default::default()
+        };
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverLt("6.2.8".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverLt("2.7.1".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverLt("3.1.4-beta.2".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverLt("3.1.4-gamma.3".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverLt("3.1.4-alpha.3".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverLt("NotASemver".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_semver_gt() {
+        let context = Context {
+            environment: "3.1.4-beta.2".into(),
+            ..Default::default()
+        };
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverGt("2.7.1".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverGt("6.2.8".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverGt("3.1.4-beta.2".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverGt("3.1.4-gamma.3".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverGt("3.1.4-alpha.3".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                inverted: Some(false),
+                expression: SemverConstraint::SemverGt("NotASemver".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_date_before() {
+        let context = Context {
+            current_time: "2022-01-29T13:00:00.000Z".into(),
+            ..Default::default()
+        };
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                inverted: Some(false),
+                expression: DateConstraint::DateBefore("2022-01-30T13:00:00.000Z".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                inverted: Some(false),
+                expression: DateConstraint::DateBefore("2022-01-28T13:00:00.000Z".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_date_after() {
+        let context = Context {
+            current_time: "2022-01-30T13:00:00.000Z".into(),
+            ..Default::default()
+        };
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                inverted: Some(false),
+                expression: DateConstraint::DateAfter("2022-01-29T13:00:00.000Z".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                inverted: Some(false),
+                expression: DateConstraint::DateAfter("2022-01-31T13:00:00.000Z".into()).into(),
+            },]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    // #[test]
+    // fn test_inversion() {
+    //     let context = Context {
+    //         environment: "2".into(),
+    //         ..Default::default()
+    //     };
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::NumEq { value: "2".into() },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::NumLt { value: "3".into() },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::NumLte { value: "3".into() },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::NumGt { value: "1".into() },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::NumGte { value: "1".into() },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     let context = Context {
+    //         environment: "3.1.4-beta.2".into(),
+    //         ..Default::default()
+    //     };
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::SemverEq {
+    //                 value: "3.1.4-beta.2".into()
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::SemverLt {
+    //                 value: "2.7.1".into()
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::SemverGt {
+    //                 value: "4.7.1".into()
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     let context = Context {
+    //         current_time: "2022-01-30T13:00:00.000Z".into(),
+    //         ..Default::default()
+    //     };
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "currentTime".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::DateAfter {
+    //                 value: "2022-01-29T13:00:00.000Z".into()
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "currentTime".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::DateBefore {
+    //                 value: "2022-01-31T13:00:00.000Z".into()
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     let context = Context {
+    //         environment: "development".into(),
+    //         ..Default::default()
+    //     };
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::StrStartsWith {
+    //                 values: vec!["dev".into()],
+    //                 case_insensitive: Some(false),
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::StrEndsWith {
+    //                 values: vec!["ent".into()],
+    //                 case_insensitive: Some(false),
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::StrContains {
+    //                 values: vec!["development".into()],
+    //                 case_insensitive: Some(false),
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::In {
+    //                 values: vec!["development".into()],
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::NotIn {
+    //                 values: vec!["production".into()],
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     let context = Context {
+    //         remote_address: parse_ip("10.20.30.40"),
+    //         ..Default::default()
+    //     };
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "remoteAddress".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::In {
+    //                 values: vec!["10.0.0.0/8".into()],
+    //             },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(!super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "remoteAddress".into(),
+    //             inverted: Some(true),
+    //             expression: ConstraintExpression::NotIn {
+    //                 values: vec!["11.0.0.0/8".into()],
+    //             },
+    //         }]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+    // }
+
+    // #[test]
+    // fn test_case_insensitive() {
+    //     let context = Context {
+    //         environment: "development".into(),
+    //         ..Default::default()
+    //     };
+    //     assert!(super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::StrStartsWith {
+    //                 values: vec!["DEV".into()],
+    //                 case_insensitive: Some(true),
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::StrEndsWith {
+    //                 values: vec!["ENT".into()],
+    //                 case_insensitive: Some(true),
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+
+    //     assert!(super::constrain(
+    //         Some(vec![Constraint {
+    //             context_name: "environment".into(),
+    //             inverted: Some(false),
+    //             expression: ConstraintExpression::StrContains {
+    //                 values: vec!["ELOP".into()],
+    //                 case_insensitive: Some(true),
+    //             },
+    //         },]),
+    //         &super::default,
+    //         None
+    //     )(&context));
+    // }
 
     #[test]
     fn test_user_with_id() {
