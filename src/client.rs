@@ -695,35 +695,48 @@ where
         loop {
             debug!("poll: retrieving features");
             let res = self.http.get(&endpoint).recv_json().await;
-            if let Ok(res) = res {
-                let features: Features = res;
-                match self.memoize(features.features) {
-                    Ok(None) => {}
-                    Ok(Some(metrics)) => {
-                        if !self.disable_metric_submission {
-                            let mut metrics_uploaded = false;
-                            let req = self.http.post(&metrics_endpoint);
-                            if let Ok(body) = http_types::Body::from_json(&metrics) {
-                                let res = req.body(body).await;
-                                if let Ok(res) = res {
-                                    if res.status().is_success() {
-                                        metrics_uploaded = true;
-                                        debug!("poll: uploaded feature metrics")
+            match res {
+                Err(e) => warn!("poll: failed to retrieve features - {:?}", e),
+                Ok(res) => {
+                    let features: Features = res;
+                    match self.memoize(features.features) {
+                        Ok(None) => {}
+                        Ok(Some(metrics)) => {
+                            if !self.disable_metric_submission {
+                                let req = self.http.post(&metrics_endpoint);
+                                match http_types::Body::from_json(&metrics) {
+                                    Err(e) => {
+                                        warn!(
+                                            "poll: error serializing metrics for upload - {:?}",
+                                            e
+                                        );
+                                    }
+                                    Ok(body) => {
+                                        let res = req.body(body).await;
+                                        match res {
+                                            Ok(res) => {
+                                                if res.status().is_success() {
+                                                    debug!("poll: uploaded feature metrics")
+                                                }
+                                            }
+                                            Err(e) => {
+                                                warn!(
+                                                    "poll: error uploading feature metrics - {:?}",
+                                                    e
+                                                );
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            if !metrics_uploaded {
-                                warn!("poll: error uploading feature metrics");
-                            }
+                        }
+                        Err(e) => {
+                            warn!("poll: failed to memoize features - {:?}", e);
                         }
                     }
-                    Err(_) => {
-                        warn!("poll: failed to memoize features");
-                    }
                 }
-            } else {
-                warn!("poll: failed to retrieve features");
             }
+
             let duration = Duration::from_millis(self.interval);
             debug!("poll: waiting {:?}", duration);
             Delay::new(duration).await;
