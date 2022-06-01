@@ -680,6 +680,52 @@ where
         }
     }
 
+    /// Poll for an update one time.
+    async fn poll_for_update(&self, endpoint: &str, metrics_endpoint: &str) {
+        debug!("poll: retrieving features");
+        let features: Features = match self.http.get(&endpoint).recv_json().await {
+            Ok(res) => res,
+            Err(e) => {
+                warn!("poll: failed to retrieve features - {:?}", e);
+                return;
+            }
+        };
+
+        let metrics = match self.memoize(features.features) {
+            Ok(None) => {
+                return;
+            }
+            Ok(Some(metrics)) => metrics,
+            Err(e) => {
+                warn!("poll: failed to memoize features - {:?}", e);
+                return;
+            }
+        };
+
+        if !self.disable_metric_submission {
+            let req = self.http.post(&metrics_endpoint);
+            let body = match http_types::Body::from_json(&metrics) {
+                Err(e) => {
+                    warn!("poll: error serializing metrics for upload - {:?}", e);
+                    return;
+                }
+                Ok(body) => body,
+            };
+
+            let res = req.body(body).await;
+            match res {
+                Ok(res) => {
+                    if res.status().is_success() {
+                        debug!("poll: uploaded feature metrics")
+                    }
+                }
+                Err(e) => {
+                    warn!("poll: error uploading feature metrics - {:?}", e);
+                }
+            }
+        }
+    }
+
     /// Query the API endpoint for features and push metrics
     ///
     /// Immediately and then every self.interval milliseconds the API server is
@@ -693,49 +739,7 @@ where
         let metrics_endpoint = Metrics::endpoint(&self.api_url);
         self.polling.store(true, Ordering::Relaxed);
         loop {
-            debug!("poll: retrieving features");
-            let res = self.http.get(&endpoint).recv_json().await;
-            match res {
-                Err(e) => warn!("poll: failed to retrieve features - {:?}", e),
-                Ok(res) => {
-                    let features: Features = res;
-                    match self.memoize(features.features) {
-                        Ok(None) => {}
-                        Ok(Some(metrics)) => {
-                            if !self.disable_metric_submission {
-                                let req = self.http.post(&metrics_endpoint);
-                                match http_types::Body::from_json(&metrics) {
-                                    Err(e) => {
-                                        warn!(
-                                            "poll: error serializing metrics for upload - {:?}",
-                                            e
-                                        );
-                                    }
-                                    Ok(body) => {
-                                        let res = req.body(body).await;
-                                        match res {
-                                            Ok(res) => {
-                                                if res.status().is_success() {
-                                                    debug!("poll: uploaded feature metrics")
-                                                }
-                                            }
-                                            Err(e) => {
-                                                warn!(
-                                                    "poll: error uploading feature metrics - {:?}",
-                                                    e
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            warn!("poll: failed to memoize features - {:?}", e);
-                        }
-                    }
-                }
-            }
+            self.poll_for_update(&endpoint, &metrics_endpoint).await;
 
             let duration = Duration::from_millis(self.interval);
             debug!("poll: waiting {:?}", duration);
