@@ -683,10 +683,22 @@ where
     /// Poll for an update one time.
     async fn poll_for_update(&self, endpoint: &str, metrics_endpoint: &str) {
         debug!("poll: retrieving features");
-        let features: Features = match self.http.get(&endpoint).recv_json().await {
+
+        let response = match self.http.get(&endpoint).recv_string().await {
             Ok(res) => res,
             Err(e) => {
-                warn!("poll: failed to retrieve features - {:?}", e);
+                warn!("poll: failed to get features - {:?}", e);
+                return;
+            }
+        };
+
+        let features: Features = match serde_json::from_str(&response) {
+            Ok(res) => res,
+            Err(e) => {
+                warn!(
+                    "poll: failed to parse features - {:?}, original json: {:?}",
+                    e, response
+                );
                 return;
             }
         };
