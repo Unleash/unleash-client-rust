@@ -72,6 +72,15 @@ mod tests {
     #[test]
     fn test_client_specification() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
     {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "surf")] {
+                use surf::Client as HttpClient;
+            } else if #[cfg(feature = "reqwest")] {
+                use reqwest::Client as HttpClient;
+            } else {
+                compile_error!("Cannot run test suite without a client enabled");
+            }
+        }
         let _ = simple_logger::SimpleLogger::new()
             .with_utc_timestamps()
             .with_module_level("isahc::agent", log::LevelFilter::Off)
@@ -100,7 +109,12 @@ mod tests {
             enum NoFeatures {}
             let c = client::ClientBuilder::default()
                 .enable_string_features()
-                .into_client::<NoFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
+                .into_client::<NoFeatures, HttpClient>(
+                    "http://127.0.0.1:1234/",
+                    "foo",
+                    "test",
+                    None,
+                )
                 .unwrap();
             log::info!("Using features {:?}", &suite.state.features);
             c.memoize(suite.state.features).unwrap();

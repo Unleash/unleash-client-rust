@@ -18,7 +18,7 @@ use serde::Serialize;
 
 use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration};
 use crate::context::Context;
-use crate::http::HTTP;
+use crate::http::{HttpClient, HTTP};
 use crate::strategy;
 
 // ----------------- Variant
@@ -61,15 +61,16 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
-    pub fn into_client<F>(
+    pub fn into_client<F, C>(
         self,
         api_url: &str,
         app_name: &str,
         instance_id: &str,
         authorization: Option<String>,
-    ) -> Result<Client<F>, http_client::Error>
+    ) -> Result<Client<F, C>, C::Error>
     where
         F: EnumArray<CachedFeature> + Debug + DeserializeOwned + Serialize,
+        C: HttpClient + Default,
     {
         Ok(Client {
             api_url: api_url.into(),
@@ -166,9 +167,10 @@ where
     }
 }
 
-pub struct Client<F>
+pub struct Client<F, C>
 where
     F: EnumArray<CachedFeature> + Debug + DeserializeOwned + Serialize,
+    C: HttpClient,
 {
     api_url: String,
     app_name: String,
@@ -178,7 +180,7 @@ where
     interval: u64,
     polling: AtomicBool,
     // Permits making extension calls to the Unleash API not yet modelled in the Rust SDK.
-    pub http: HTTP,
+    pub http: HTTP<C>,
     // known strategies: strategy_name : memoiser
     strategies: Mutex<HashMap<String, strategy::Strategy>>,
     // memoised state: feature_name: [callback, callback, ...]
@@ -384,9 +386,10 @@ where
     }
 }
 
-impl<F> Client<F>
+impl<F, C> Client<F, C>
 where
     F: EnumArray<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
+    C: HttpClient + Default,
 {
     /// The cached state can be accessed. It may be uninitialised, and
     /// represents a point in time snapshot: subsequent calls may have wound the
@@ -694,7 +697,7 @@ where
         self.polling.store(true, Ordering::Relaxed);
         loop {
             debug!("poll: retrieving features");
-            let res = self.http.get(&endpoint).recv_json().await;
+            let res = self.http.get_json(&endpoint).await;
             if let Ok(res) = res {
                 let features: Features = res;
                 match self.memoize(features.features) {
@@ -702,14 +705,11 @@ where
                     Ok(Some(metrics)) => {
                         if !self.disable_metric_submission {
                             let mut metrics_uploaded = false;
-                            let req = self.http.post(&metrics_endpoint);
-                            if let Ok(body) = http_types::Body::from_json(&metrics) {
-                                let res = req.body(body).await;
-                                if let Ok(res) = res {
-                                    if res.status().is_success() {
-                                        metrics_uploaded = true;
-                                        debug!("poll: uploaded feature metrics")
-                                    }
+                            let res = self.http.post_json(&metrics_endpoint, metrics).await;
+                            if let Ok(successful) = res {
+                                if successful {
+                                    metrics_uploaded = true;
+                                    debug!("poll: uploaded feature metrics")
                                 }
                             }
                             if !metrics_uploaded {
@@ -724,9 +724,11 @@ where
             } else {
                 warn!("poll: failed to retrieve features");
             }
+
             let duration = Duration::from_millis(self.interval);
             debug!("poll: waiting {:?}", duration);
             Delay::new(duration).await;
+
             if !self.polling.load(Ordering::Relaxed) {
                 return;
             }
@@ -748,12 +750,12 @@ where
                 .collect(),
             ..Default::default()
         };
-        let res = self
+        let success = self
             .http
-            .post(Registration::endpoint(&self.api_url))
-            .body(http_types::Body::from_json(&registration)?)
-            .await?;
-        if !res.status().is_success() {
+            .post_json(&Registration::endpoint(&self.api_url), &registration)
+            .await
+            .map_err(|err| anyhow::anyhow!(err))?;
+        if !success {
             return Err(anyhow::anyhow!("Failed to register with unleash API server").into());
         }
         Ok(())
@@ -822,6 +824,16 @@ mod tests {
     use crate::api::{self, Feature, Features, Strategy};
     use crate::context::{Context, IPAddress};
     use crate::strategy;
+
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "surf")] {
+            use surf::Client as HttpClient;
+        } else if #[cfg(feature = "reqwest")] {
+            use reqwest::Client as HttpClient;
+        } else {
+            compile_error!("Cannot run test suite without a client enabled");
+        }
+    }
 
     fn features() -> Features {
         Features {
@@ -913,7 +925,7 @@ mod tests {
             nostrategies,
         }
         let c = ClientBuilder::default()
-            .into_client::<UserFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
+            .into_client::<UserFeatures, HttpClient>("http://127.0.0.1:1234/", "foo", "test", None)
             .unwrap();
 
         c.memoize(f.features).unwrap();
@@ -956,7 +968,7 @@ mod tests {
         enum NoFeatures {}
         let c = ClientBuilder::default()
             .enable_string_features()
-            .into_client::<NoFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
+            .into_client::<NoFeatures, HttpClient>("http://127.0.0.1:1234/", "foo", "test", None)
             .unwrap();
 
         c.memoize(f.features).unwrap();
@@ -1021,7 +1033,7 @@ mod tests {
         }
         let client = ClientBuilder::default()
             .strategy("reversed", Box::new(&_reversed_uids))
-            .into_client::<UserFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
+            .into_client::<UserFeatures, HttpClient>("http://127.0.0.1:1234/", "foo", "test", None)
             .unwrap();
 
         let f = Features {
@@ -1164,7 +1176,7 @@ mod tests {
             two,
         }
         let c = ClientBuilder::default()
-            .into_client::<UserFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
+            .into_client::<UserFeatures, HttpClient>("http://127.0.0.1:1234/", "foo", "test", None)
             .unwrap();
 
         c.memoize(f.features).unwrap();
@@ -1245,7 +1257,7 @@ mod tests {
         enum NoFeatures {}
         let c = ClientBuilder::default()
             .enable_string_features()
-            .into_client::<NoFeatures>("http://127.0.0.1:1234/", "foo", "test", None)
+            .into_client::<NoFeatures, HttpClient>("http://127.0.0.1:1234/", "foo", "test", None)
             .unwrap();
 
         c.memoize(f.features).unwrap();

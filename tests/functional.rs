@@ -6,7 +6,7 @@
 //! Currently expects a feature called default with one strategy default
 //! Additional features are ignored.
 
-#[cfg(all(feature = "functional"))]
+#[cfg(feature = "functional")]
 mod tests {
     use std::sync::Arc;
     use std::thread;
@@ -17,7 +17,10 @@ mod tests {
     use futures_timer::Delay;
     use serde::{Deserialize, Serialize};
 
-    use unleash_api_client::{client, config::EnvironmentConfig};
+    use unleash_api_client::{client, config::EnvironmentConfig, http::HttpClient};
+
+    #[cfg(not(any(feature = "surf", feature = "reqwest")))]
+    compile_error!("Cannot run test suite without a client enabled");
 
     #[allow(non_camel_case_types)]
     #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
@@ -25,14 +28,16 @@ mod tests {
         default,
     }
 
-    #[test]
-    fn test_smoke_async() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    fn test_smoke_async<C>() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
+    where
+        C: HttpClient + Default + 'static,
+    {
         let _ = simple_logger::init();
         task::block_on(async {
             let config = EnvironmentConfig::from_env()?;
             let client = client::ClientBuilder::default()
                 .interval(500)
-                .into_client::<UserFeatures>(
+                .into_client::<UserFeatures, C>(
                     &config.api_url,
                     &config.app_name,
                     &config.instance_id,
@@ -53,16 +58,34 @@ mod tests {
         })
     }
 
+    #[cfg(feature = "surf")]
     #[test]
-    fn test_smoke_threaded() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    fn test_smoke_async_surf() {
+        test_smoke_async::<surf::Client>().unwrap();
+    }
+
+    #[cfg(feature = "reqwest")]
+    #[test]
+    fn test_smoke_async_reqwest() {
+        test_smoke_async::<reqwest::Client>().unwrap();
+    }
+
+    fn test_smoke_threaded<C>() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
+    where
+        C: HttpClient + Default + 'static,
+    {
         let _ = simple_logger::init();
         let config = EnvironmentConfig::from_env()?;
-        let client = Arc::new(client::ClientBuilder::default().interval(500).into_client(
-            &config.api_url,
-            &config.app_name,
-            &config.instance_id,
-            config.secret,
-        )?);
+        let client = Arc::new(
+            client::ClientBuilder::default()
+                .interval(500)
+                .into_client::<_, C>(
+                    &config.api_url,
+                    &config.app_name,
+                    &config.instance_id,
+                    config.secret,
+                )?,
+        );
         task::block_on(async {
             if let Err(e) = client.register().await {
                 Err(e)
@@ -91,5 +114,17 @@ mod tests {
         handler.join().unwrap();
         println!("got metrics");
         Ok(())
+    }
+
+    #[cfg(feature = "surf")]
+    #[test]
+    fn test_smoke_threaded_surf() {
+        test_smoke_threaded::<surf::Client>().unwrap();
+    }
+
+    #[cfg(feature = "reqwest")]
+    #[test]
+    fn test_smoke_threaded_reqwest() {
+        test_smoke_threaded::<reqwest::Client>().unwrap();
     }
 }

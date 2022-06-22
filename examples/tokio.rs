@@ -1,9 +1,12 @@
-// Copyright 2020 Cognite AS
+// Copyright 2020, 2022 Cognite AS
 
 //!
 //! Set environment variables as per config.rs to run this.
 //! It will query a feature called "default", report status for it, and upload a
 //! metric bucket.
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "reqwest")] {
 
 use std::time::Duration;
 
@@ -27,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     let config = EnvironmentConfig::from_env()?;
     let client = client::ClientBuilder::default()
         .interval(500)
-        .into_client::<UserFeatures>(
+        .into_client::<UserFeatures, reqwest::Client>(
             &config.api_url,
             &config.app_name,
             &config.instance_id,
@@ -48,4 +51,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     })
     .await;
     Ok(())
+}
+
+    } else {
+        fn main() -> Result<(), anyhow::Error> {
+            Err(anyhow::anyhow!("reqwest not enabled"))
+        }
+    }
 }
