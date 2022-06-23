@@ -1,11 +1,12 @@
 version: "3.3"
 services:
   web:
-    image: unleashorg/unleash-server:3.3
+    image: unleashorg/unleash-server:4.12.6
     ports:
       - "4242:4242"
     environment:
       DATABASE_URL: postgres://postgres:unleash@db/postgres
+      DATABASE_SSL: 'false'
     depends_on:
       - db
     command: > 
@@ -14,7 +15,7 @@ services:
           echo 'Postgres is unavailable.'
           sleep 1
         done
-        npm run start"
+        node index.js"
   db:
     expose:
       - "5432"
