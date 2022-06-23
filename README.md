@@ -81,11 +81,26 @@ participating in this project you agree to abide by its terms.
 ## Contributing
 
 PR's on Github as normal please. Cargo test to run the test suite, rustfmt code
-before submitting. To run the functional test suite:
+before submitting. To run the functional test suite you need an Unleash API to
+execute against.
+
+For instance, one way:
 
 ```shell
 docker-compose up -d
-UNLEASH_API_URL=http://127.0.0.1:4242/api UNLEASH_APP_NAME=fred UNLEASH_INSTANCE_ID=test cargo test --features functional  -- --nocapture
+```
+
+Visit <http://localhost:4242/> and log in with admin + unleash4all, then create
+a new API token at <http://localhost:4242/admin/api/create-token> for user
+admin, type Client.
+
+Then run the test suite:
+
+```shell
+UNLEASH_API_URL=http://127.0.0.1:4242/api \
+  UNLEASH_APP_NAME=fred UNLEASH_INSTANCE_ID=test \
+  UNLEASH_CLIENT_SECRET="<tokenvalue>" \
+  cargo test --features functional  -- --nocapture
 ```
 
 or similar. The functional test suite looks for a manually setup set of
