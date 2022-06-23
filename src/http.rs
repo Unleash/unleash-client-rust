@@ -1,59 +1,79 @@
-// Copyright 2020 Cognite AS
+// Copyright 2020, 2022 Cognite AS
 //! The HTTP Layer
 
-use http_types::headers;
+#[cfg(feature = "reqwest")]
+mod reqwest;
+mod shim;
+#[cfg(feature = "surf")]
+mod surf;
 
-pub struct HTTP {
-    authorization_header: headers::HeaderName,
-    app_name_header: headers::HeaderName,
-    instance_id_header: headers::HeaderName,
+pub struct HTTP<C: HttpClient> {
+    authorization_header: C::HeaderName,
+    app_name_header: C::HeaderName,
+    instance_id_header: C::HeaderName,
     app_name: String,
     instance_id: String,
     authorization: Option<String>,
-    client: surf::Client,
+    client: C,
 }
 
-impl HTTP {
+use serde::{de::DeserializeOwned, Serialize};
+#[doc(inline)]
+pub use shim::HttpClient;
+
+impl<C> HTTP<C>
+where
+    C: HttpClient + Default,
+{
     /// The error type on this will change in future.
     pub fn new(
         app_name: String,
         instance_id: String,
         authorization: Option<String>,
-    ) -> Result<Self, http_types::Error> {
+    ) -> Result<Self, C::Error> {
         Ok(HTTP {
-            client: surf::Client::new(),
+            client: C::default(),
             app_name,
             instance_id,
             authorization,
-            authorization_header: headers::HeaderName::from_bytes("authorization".into())?,
-            app_name_header: headers::HeaderName::from_bytes("appname".into())?,
-            instance_id_header: headers::HeaderName::from_bytes("instance_id".into())?,
+            authorization_header: C::build_header("authorization")?,
+            app_name_header: C::build_header("appname")?,
+            instance_id_header: C::build_header("instance_id")?,
         })
     }
 
-    /// Perform a GET. Returns errors per surf::Client::get.
-    pub fn get(&self, uri: impl AsRef<str>) -> surf::RequestBuilder {
-        let request = self
-            .client
-            .get(uri)
-            .header(self.app_name_header.clone(), self.app_name.as_str())
-            .header(self.instance_id_header.clone(), self.instance_id.as_str());
-        if let Some(auth) = &self.authorization {
-            request.header(self.authorization_header.clone(), auth.as_str())
-        } else {
-            request
-        }
+    /// Perform a GET. Returns errors per HttpClient::get.
+    pub fn get(&self, uri: &str) -> C::RequestBuilder {
+        let request = self.client.get(uri);
+        self.attach_headers(request)
     }
 
-    /// Perform a POST. Returns errors per surf::Client::get.
-    pub fn post(&self, uri: impl AsRef<str>) -> surf::RequestBuilder {
-        let request = self
-            .client
-            .post(uri)
-            .header(self.app_name_header.clone(), self.app_name.as_str())
-            .header(self.instance_id_header.clone(), self.instance_id.as_str());
+    /// Make a get request and parse into JSON
+    pub async fn get_json<T: DeserializeOwned>(&self, endpoint: &str) -> Result<T, C::Error> {
+        C::get_json(self.get(endpoint)).await
+    }
+
+    /// Perform a POST. Returns errors per HttpClient::post.
+    pub fn post(&self, uri: &str) -> C::RequestBuilder {
+        let request = self.client.post(uri);
+        self.attach_headers(request)
+    }
+
+    /// Encode content into JSON and post to an endpoint. Returns the statuscode
+    /// is_success() value.
+    pub async fn post_json<T: Serialize + Sync>(
+        &self,
+        endpoint: &str,
+        content: T,
+    ) -> Result<bool, C::Error> {
+        C::post_json(self.post(endpoint), &content).await
+    }
+
+    fn attach_headers(&self, request: C::RequestBuilder) -> C::RequestBuilder {
+        let request = C::header(request, &self.app_name_header, self.app_name.as_str());
+        let request = C::header(request, &self.instance_id_header, self.instance_id.as_str());
         if let Some(auth) = &self.authorization {
-            request.header(self.authorization_header.clone(), auth.as_str())
+            C::header(request, &self.authorization_header.clone(), auth.as_str())
         } else {
             request
         }

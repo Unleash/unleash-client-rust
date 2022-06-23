@@ -5,8 +5,12 @@ client for it to facilitate using the API to control features in Rust programs.
 
 ## Client overview
 
-The client is written using async. Any std compatible async runtime should be
-compatible. Examples with async-std and tokio are in the examples/ in the source
+The client is written using async rust. For communicating with the Unleash API
+surf or reqwest support is built in, or any async HTTP client can be provided by
+the user if they implement the thin trait used to abstract over the actual
+client.
+
+Examples with async-std and tokio are in the examples/ in the source
 tree.
 
 To use it in a sync program, run an async executor and `block_on()` the relevant
@@ -27,7 +31,7 @@ The easiest way to get started with the `Client` is using the `ClientBuilder`. A
 let config = EnvironmentConfig::from_env()?;
 let client = client::ClientBuilder::default()
     .interval(500)
-    .into_client::<UserFeatures>(
+    .into_client::<UserFeatures, reqwest::Client>(
         &config.api_url,
         &config.app_name,
         &config.instance_id,
@@ -63,9 +67,9 @@ enable_string_features | N/A | By default the Rust SDK requires you to define an
 
 ## Status
 
-Core Unleash API features work, with Rust 1.56 or above.
+Core Unleash API features work, with Rust 1.57 or above. The MSRV for this project is weakly enforced: when a hard dependency raises its version, so will the minimum version tested against, but if older rust versions work for a user, that is not prevented. `time` in particular is known to enforce a 6-month compiler age, so regular increases with the minimum version tested against are expected.
 
-Missing Unleash specified features:
+Unimplemented Unleash specified features:
 
 - local serialised copy of toggles to survive restarts without network traffic.
 

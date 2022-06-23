@@ -2,7 +2,7 @@ on: [push, pull_request]
 name: CI
 
 jobs:
-  ci:
+  tests:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -10,7 +10,39 @@ jobs:
           - stable
           - beta
           - nightly
-          - 1.56.0 # MSRV
+          - 1.57.0 # MSRV
+        features:
+          - surf-client
+          # no need for reqwest-client-rustls, it changes only internals of reqwest
+          - reqwest-client
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --no-default-features --features ${{ matrix.features }}
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features --features ${{ matrix.features }}
+
+  clippy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - stable
 
     steps:
       - uses: actions/checkout@v2
@@ -27,18 +59,20 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
+          args: --features surf-client,reqwest-client,reqwest-client-rustls --all-targets
 
       - uses: actions-rs/cargo@v1
+        # We test with all-features to ensure that that does build
         with:
           command: test
+          args: --features surf-client,reqwest-client,reqwest-client-rustls --all-targets
 
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
 
-      - if: ${{ matrix.rust == 'stable' }}
-        uses: actions-rs/cargo@v1
+      - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -- -D warnings
+          args: --features surf-client,reqwest-client,reqwest-client-rustls --all-targets -- -D warnings
