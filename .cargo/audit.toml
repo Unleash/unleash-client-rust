@@ -1,0 +1,4 @@
+[advisories]
+ignore = [
+    "RUSTSEC-2022-0013", # regex in criterion
+]

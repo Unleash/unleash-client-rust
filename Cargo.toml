@@ -56,7 +56,8 @@ serde_plain = "1.0.0"
 surf = { version = "2.3.1", optional = true }
 
 [dependencies.chrono]
-features = ["serde"]
+default-features = false
+features = ["clock", "serde"]
 version = "0.4.19"
 
 [dependencies.reqwest]
@@ -71,7 +72,7 @@ version = "1.0"
 
 [dev-dependencies]
 # async-std = "1.10.0"
-criterion = "0.3.5"
+criterion = "0.3.5"     # Remember to update audit.toml
 futures = "0.3.17"
 maplit = "1.0.2"
 num_cpus = "1.13.0"
