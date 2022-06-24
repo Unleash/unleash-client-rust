@@ -26,7 +26,7 @@ impl<'de> de::Deserialize<'de> for IPAddress {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct Context {
     #[serde(rename = "userId")]
     pub user_id: Option<String>,
