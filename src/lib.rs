@@ -106,6 +106,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
   Enables reqwest with OpenSSL TLS support
 * **reqwest-client-rustls** -
   Enables reqwest with RusTLS support
+* **strict** -
+  Turn unexpected fields in API responses into errors
 * **surf-client** -
   Enables Surf as the HTTP client to retrieve flags
 */
