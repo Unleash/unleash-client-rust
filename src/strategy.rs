@@ -145,8 +145,21 @@ fn _user_id<S: BuildHasher>(
     })
 }
 
+// Build a closure to handle customField rollouts, parameterised by groupId and
+// a metaparameter of the percentage taken from rollout_key.
+fn _custom_field<S: BuildHasher>(
+    parameters: Option<HashMap<String, String, S>>,
+    rollout_key: &str,
+) -> Evaluate {
+    let (group, rollout) = group_and_rollout(&parameters, rollout_key);
+    Box::new(move |context: &Context| -> bool {
+        let variable = context.properties.get("customField");
+        partial_rollout(&group, variable, rollout)
+    })
+}
+
 /// <https://docs.getunleash.io/user_guide/activation_strategy#gradual-rollout>
-/// stickiness: [default|userId|sessionId|random]
+/// stickiness: [default|userId|sessionId|random|customField]
 /// groupId: hash key
 /// rollout: percentage
 pub fn flexible_rollout<S: BuildHasher>(
@@ -162,6 +175,7 @@ pub fn flexible_rollout<S: BuildHasher>(
     } else {
         return Box::new(|_| false);
     } {
+        "customField" => _custom_field(parameters, "rollout"),
         "default" => {
             // user, session, random in that order.
             let (group, rollout) = group_and_rollout(&parameters, "rollout");

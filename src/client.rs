@@ -1116,6 +1116,7 @@ mod tests {
                             "type".into() => "string".into(),
                             "value".into() => "val1".into()]),
                         overrides: None,
+                        stickiness: None,
                     }]),
                     name: "one".into(),
                     strategies: vec![],
@@ -1132,6 +1133,7 @@ mod tests {
                             "type".into() => "string".into(),
                             "value".into() => "val1".into()]),
                             overrides: None,
+                            stickiness: None,
                         },
                         api::Variant {
                             name: "varianttwo".into(),
@@ -1140,6 +1142,7 @@ mod tests {
                             "type".into() => "string".into(),
                             "value".into() => "val2".into()]),
                             overrides: None,
+                            stickiness: None,
                         },
                     ]),
                     name: "two".into(),

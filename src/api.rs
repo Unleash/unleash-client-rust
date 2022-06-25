@@ -66,6 +66,7 @@ pub struct Variant {
     pub weight: u8,
     pub payload: Option<HashMap<String, String>>,
     pub overrides: Option<Vec<VariantOverride>>,
+    pub stickiness: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
