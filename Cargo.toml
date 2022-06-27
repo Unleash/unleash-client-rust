@@ -24,6 +24,8 @@ functional = []
 reqwest-client = ["reqwest", "reqwest/default-tls"]
 # For users that don't want to depend on OpenSSL.
 reqwest-client-rustls = ["reqwest", "reqwest/rustls-tls"]
+# To error if an unsupported API feature is present
+strict = []
 # For use with --no-default-features
 surf-client = ["surf", "async-std"]
 

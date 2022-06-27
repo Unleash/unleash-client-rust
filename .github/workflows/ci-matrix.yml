@@ -30,12 +30,12 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --no-default-features --features ${{ matrix.features }}
+          args: --no-default-features --features strict,${{ matrix.features }}
 
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features ${{ matrix.features }}
+          args: --no-default-features --features strict,${{ matrix.features }}
 
   clippy:
     runs-on: ubuntu-latest
@@ -59,13 +59,13 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --features surf-client,reqwest-client,reqwest-client-rustls --all-targets
+          args: --features strict,surf-client,reqwest-client,reqwest-client-rustls --all-targets
 
       - uses: actions-rs/cargo@v1
-        # We test with all-features to ensure that that does build
+        # We test with approximately all-features to ensure that that does build (excludes nightly only backtrace)
         with:
           command: test
-          args: --features surf-client,reqwest-client,reqwest-client-rustls --all-targets
+          args: --features strict,surf-client,reqwest-client,reqwest-client-rustls --all-targets
 
       - uses: actions-rs/cargo@v1
         with:
@@ -75,4 +75,4 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --features surf-client,reqwest-client,reqwest-client-rustls --all-targets -- -D warnings
+          args: --features strict,surf-client,reqwest-client,reqwest-client-rustls --all-targets -- -D warnings

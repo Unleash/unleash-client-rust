@@ -7,7 +7,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-// #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct Features {
     pub version: u8,
     pub features: Vec<Feature>,
@@ -20,7 +20,7 @@ impl Features {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-// #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct Feature {
     pub name: String,
     #[serde(default)]
@@ -33,7 +33,7 @@ pub struct Feature {
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug)]
-// #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct Strategy {
     pub constraints: Option<Vec<Constraint>>,
     pub name: String,
@@ -41,7 +41,7 @@ pub struct Strategy {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-// #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct Constraint {
     #[serde(rename = "contextName")]
     pub context_name: String,
@@ -51,7 +51,7 @@ pub struct Constraint {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(tag = "operator", content = "values")]
-// #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub enum ConstraintExpression {
     #[serde(rename = "IN")]
     In(Vec<String>),
@@ -60,7 +60,7 @@ pub enum ConstraintExpression {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-// #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct Variant {
     pub name: String,
     pub weight: u8,
@@ -69,7 +69,7 @@ pub struct Variant {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-// #[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct VariantOverride {
     #[serde(rename = "contextName")]
     pub context_name: String,
