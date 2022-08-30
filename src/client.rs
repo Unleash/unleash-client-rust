@@ -201,7 +201,7 @@ where
     ) -> bool;
 }
 
-impl<'a, F> Enabled<F> for &Arc<CachedState<F>>
+impl<F> Enabled<F> for &Arc<CachedState<F>>
 where
     F: EnumArray<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
 {
