@@ -232,7 +232,7 @@ where
                 feature.enabled.fetch_add(1, Ordering::Relaxed);
                 return true;
             } else {
-                feature.disabled.fetch_add(1, Ordering::Relaxed);
+                // Traces once per strategy (memo)
                 trace!(
                     "is_enabled: feature {:?} not enabled by memo {:p}, context {:?}",
                     feature_enum,
@@ -242,10 +242,9 @@ where
             }
         }
         if !feature.known {
-            trace!(
+            debug!(
                 "is_enabled: Unknown feature {:?}, using default {}",
-                feature_enum,
-                default
+                feature_enum, default
             );
             if default {
                 feature.enabled.fetch_add(1, Ordering::Relaxed);
@@ -255,7 +254,7 @@ where
             default
         } else {
             // known, non-empty, missed all strategies: disabled
-            trace!(
+            debug!(
                 "is_enabled: feature {:?} failed all strategies, disabling",
                 feature_enum
             );
@@ -291,7 +290,7 @@ where
                     feature.enabled.fetch_add(1, Ordering::Relaxed);
                     return true;
                 } else {
-                    feature.disabled.fetch_add(1, Ordering::Relaxed);
+                    // Traces once per strategy (memo)
                     trace!(
                         "is_enabled: feature {} not enabled by memo {:p}, context {:?}",
                         feature_name,
@@ -316,10 +315,9 @@ where
                 false
             }
         } else {
-            trace!(
+            debug!(
                 "is_enabled: Unknown feature {}, using default {}",
-                feature_name,
-                default
+                feature_name, default
             );
             // Insert a compiled feature to track metrics.
             cached_features.rcu(|cached_state: &Option<Arc<CachedState<F>>>| {
