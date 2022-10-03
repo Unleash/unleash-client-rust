@@ -213,53 +213,57 @@ where
             context
         );
         let feature = &self.features[feature_enum.clone()];
-        let default_context: Context = Default::default();
-        let context = context.unwrap_or(&default_context);
-        if feature.strategies.is_empty() && feature.known && !feature.feature_disabled {
-            trace!(
-                "is_enabled: feature {:?} has no strategies: enabling",
-                feature_enum
-            );
-            feature.enabled.fetch_add(1, Ordering::Relaxed);
-            return true;
-        }
-        for memo in feature.strategies.iter() {
-            if memo(context) {
-                debug!(
-                    "is_enabled: feature {:?} enabled by memo {:p}, context {:?}",
-                    feature_enum, memo, context
-                );
-                feature.enabled.fetch_add(1, Ordering::Relaxed);
-                return true;
-            } else {
-                // Traces once per strategy (memo)
+        let default_context = &Default::default();
+        let context = context.unwrap_or(default_context);
+
+        match (|| {
+            if feature.strategies.is_empty() && feature.known && !feature.feature_disabled {
                 trace!(
-                    "is_enabled: feature {:?} not enabled by memo {:p}, context {:?}",
-                    feature_enum,
-                    memo,
-                    context
+                    "is_enabled: feature {:?} has no strategies: enabling",
+                    feature_enum
                 );
+                return true;
             }
-        }
-        if !feature.known {
-            debug!(
-                "is_enabled: Unknown feature {:?}, using default {}",
-                feature_enum, default
-            );
-            if default {
-                feature.enabled.fetch_add(1, Ordering::Relaxed);
+            for memo in feature.strategies.iter() {
+                if memo(context) {
+                    debug!(
+                        "is_enabled: feature {:?} enabled by memo {:p}, context {:?}",
+                        feature_enum, memo, context
+                    );
+                    return true;
+                } else {
+                    // Traces once per strategy (memo)
+                    trace!(
+                        "is_enabled: feature {:?} not enabled by memo {:p}, context {:?}",
+                        feature_enum,
+                        memo,
+                        context
+                    );
+                }
+            }
+            if !feature.known {
+                debug!(
+                    "is_enabled: Unknown feature {:?}, using default {}",
+                    feature_enum, default
+                );
+                default
             } else {
-                feature.disabled.fetch_add(1, Ordering::Relaxed);
+                // known, non-empty, missed all strategies: disabled
+                debug!(
+                    "is_enabled: feature {:?} failed all strategies, disabling",
+                    feature_enum
+                );
+                false
             }
-            default
-        } else {
-            // known, non-empty, missed all strategies: disabled
-            debug!(
-                "is_enabled: feature {:?} failed all strategies, disabling",
-                feature_enum
-            );
-            feature.disabled.fetch_add(1, Ordering::Relaxed);
-            false
+        })() {
+            true => {
+                feature.enabled.fetch_add(1, Ordering::Relaxed);
+                true
+            }
+            false => {
+                feature.disabled.fetch_add(1, Ordering::Relaxed);
+                false
+            }
         }
     }
 

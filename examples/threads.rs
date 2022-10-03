@@ -57,6 +57,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
                 config.secret,
             )?,
     );
+    // remove when https://github.com/rust-lang/rust/issues/102616 is fixed
+    #[allow(clippy::question_mark)]
     rt.block_on(async {
         if let Err(e) = client.register().await {
             Err(e)
