@@ -51,7 +51,7 @@ The values required for the `into_client` method are described as follows (in or
 While the above code shows the usage of the `EnvironmentConfig`, this isn't required and is provided as a convenient way of reading a data from the system environment variables.
 
 EnvironmentConfig Property | Environment Variable | Required? |
----------|-------------|-----------|-------|
+---------|-------------|-----------|
 `api_url`  | `UNLEASH_API_URL`      | Yes |
 `app_name` | `UNLEASH_APP_NAME`     | Yes |
 `instance_id` | `UNLEASH_INSTANCE_ID` | Yes |
