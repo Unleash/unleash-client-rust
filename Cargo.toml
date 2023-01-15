@@ -79,6 +79,8 @@ futures = "0.3.17"
 maplit = "1.0.2"
 num_cpus = "1.13.0"
 simple_logger = "2.1.0"
+serde_qs = "*"
+serde_urlencoded = "*"
 
 [dev-dependencies.tokio]
 features = ["rt-multi-thread", "macros", "time"]

@@ -34,6 +34,12 @@ pub trait HttpClient: Sync + Send {
         value: &str,
     ) -> Self::RequestBuilder;
 
+    /// Add a query to a request
+    fn query(
+        builder: Self::RequestBuilder,
+        query: &impl Serialize,
+    ) -> Result<Self::RequestBuilder, Self::Error>;
+
     /// Make a get request and parse into JSON
     async fn get_json<T: DeserializeOwned>(req: Self::RequestBuilder) -> Result<T, Self::Error>;
 

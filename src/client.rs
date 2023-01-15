@@ -16,7 +16,7 @@ use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration};
+use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration, TagFilter};
 use crate::context::Context;
 use crate::http::{HttpClient, HTTP};
 use crate::strategy;
@@ -57,6 +57,9 @@ pub struct ClientBuilder {
     disable_metric_submission: bool,
     enable_str_features: bool,
     interval: u64,
+    project_name: Option<String>,
+    name_prefix: Option<String>,
+    tags: Option<Vec<TagFilter>>,
     strategies: HashMap<String, strategy::Strategy>,
 }
 
@@ -75,6 +78,9 @@ impl ClientBuilder {
         Ok(Client {
             api_url: api_url.into(),
             app_name: app_name.into(),
+            project_name: self.project_name,
+            name_prefix: self.name_prefix,
+            tags: self.tags,
             disable_metric_submission: self.disable_metric_submission,
             enable_str_features: self.enable_str_features,
             instance_id: instance_id.into(),
@@ -84,6 +90,21 @@ impl ClientBuilder {
             cached_state: ArcSwapOption::from(None),
             strategies: Mutex::new(self.strategies),
         })
+    }
+
+    pub fn with_project_name(mut self, project_name: String) -> Self {
+        self.project_name = Some(project_name);
+        self
+    }
+
+    pub fn with_name_prefix(mut self, name_prefix: String) -> Self {
+        self.name_prefix = Some(name_prefix);
+        self
+    }
+
+    pub fn with_tags(mut self, tags: Vec<TagFilter>) -> Self {
+        self.tags = Some(tags);
+        self
     }
 
     pub fn disable_metric_submission(mut self) -> Self {
@@ -114,11 +135,13 @@ impl Default for ClientBuilder {
             enable_str_features: false,
             interval: 15000,
             strategies: Default::default(),
+            project_name: None,
+            name_prefix: None,
+            tags: None,
         };
         result
             .strategy("default", Box::new(&strategy::default))
             .strategy("applicationHostname", Box::new(&strategy::hostname))
-            .strategy("default", Box::new(&strategy::default))
             .strategy("gradualRolloutRandom", Box::new(&strategy::random))
             .strategy("gradualRolloutSessionId", Box::new(&strategy::session_id))
             .strategy("gradualRolloutUserId", Box::new(&strategy::user_id))
@@ -174,6 +197,9 @@ where
 {
     api_url: String,
     app_name: String,
+    project_name: Option<String>,
+    name_prefix: Option<String>,
+    tags: Option<Vec<TagFilter>>,
     disable_metric_submission: bool,
     enable_str_features: bool,
     instance_id: String,
@@ -697,7 +723,17 @@ where
         self.polling.store(true, Ordering::Relaxed);
         loop {
             debug!("poll: retrieving features");
-            let res = self.http.get_json(&endpoint).await;
+            let res = self
+                .http
+                .get_json(
+                    &endpoint,
+                    Some(&Features::query(
+                        self.project_name.clone(),
+                        self.name_prefix.clone(),
+                        &self.tags,
+                    )),
+                )
+                .await;
             if let Ok(res) = res {
                 let features: Features = res;
                 match self.memoize(features.features) {
@@ -821,9 +857,12 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::{ClientBuilder, Variant};
-    use crate::api::{self, Feature, Features, Strategy};
+    use crate::api::{self, Feature, Features, Strategy, TagFilter};
     use crate::context::{Context, IPAddress};
-    use crate::strategy;
+    use crate::http::HTTP;
+    use crate::{strategy, Client};
+    use arc_swap::ArcSwapOption;
+    use std::fmt::{Debug, Formatter};
 
     cfg_if::cfg_if! {
         if #[cfg(feature = "surf")] {
@@ -1316,5 +1355,82 @@ mod tests {
         assert_eq!(variant2, c.get_variant_str("two", &uid1));
         assert_eq!(variant2, c.get_variant_str("two", &session1));
         assert_eq!(variant1, c.get_variant_str("two", &host1));
+    }
+
+    #[test]
+    fn test_builder() {
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum NoFeatures {}
+
+        let api_url = "http://127.0.0.1:1234/";
+        let instance_id = "test";
+        let app_name = "foo";
+        let project_name = "myproject".to_string();
+        let name_prefix = "prefix".to_string();
+        let tags = vec![
+            TagFilter {
+                name: "simple".into(),
+                value: "taga".into(),
+            },
+            TagFilter {
+                name: "simple".into(),
+                value: "tagb".into(),
+            },
+        ];
+
+        let client: Client<NoFeatures, HttpClient> = Client {
+            api_url: api_url.into(),
+            disable_metric_submission: false,
+            enable_str_features: false,
+            instance_id: instance_id.into(),
+            interval: 15000,
+            polling: Default::default(),
+            http: HTTP::new(app_name.into(), instance_id.into(), None).unwrap(),
+            strategies: Default::default(),
+            project_name: Some(project_name.clone()),
+            name_prefix: Some(name_prefix.clone()),
+            tags: Some(tags.clone()),
+            app_name: app_name.into(),
+            cached_state: ArcSwapOption::from(None),
+        };
+
+        let client_from_builder = ClientBuilder::default()
+            .with_project_name(project_name)
+            .with_name_prefix(name_prefix)
+            .with_tags(tags)
+            .into_client::<NoFeatures, HttpClient>(&api_url, &app_name, &instance_id, None)
+            .unwrap();
+
+        impl PartialEq for Client<NoFeatures, HttpClient> {
+            fn eq(&self, other: &Self) -> bool {
+                self.api_url == other.api_url
+                    && self.app_name == other.app_name
+                    && self.project_name == other.project_name
+                    && self.name_prefix == other.name_prefix
+                    && self.tags == other.tags
+                    && self.disable_metric_submission == other.disable_metric_submission
+                    && self.enable_str_features == other.enable_str_features
+                    && self.instance_id == other.instance_id
+                    && self.interval == other.interval
+            }
+        }
+
+        impl Debug for Client<NoFeatures, HttpClient> {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("Client<NoFeatures, HttpClient>")
+                    .field("api_url", &self.api_url)
+                    .field("app_name", &self.app_name)
+                    .field("project_name", &self.project_name)
+                    .field("name_prefix", &self.name_prefix)
+                    .field("tags", &self.tags)
+                    .field("disable_metric_submission", &self.disable_metric_submission)
+                    .field("enable_str_features", &self.enable_str_features)
+                    .field("instance_id", &self.instance_id)
+                    .field("interval", &self.interval)
+                    .finish()
+            }
+        }
+
+        assert_eq!(client, client_from_builder);
     }
 }

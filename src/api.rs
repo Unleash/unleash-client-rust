@@ -13,9 +13,71 @@ pub struct Features {
     pub features: Vec<Feature>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct TagFilter {
+    pub name: String,
+    pub value: String,
+}
+
+impl TagFilter {
+    pub fn format(&self) -> String {
+        format!("{}:{}", self.name, self.value)
+    }
+}
+
+#[derive(Serialize, Debug)]
+struct FeaturesQuery {
+    pub project: Option<String>,
+    #[serde(rename = "namePrefix")]
+    pub name_prefix: Option<String>,
+    #[serde(rename = "tag")]
+    pub tags: Option<Vec<String>>,
+}
+
 impl Features {
     pub fn endpoint(api_url: &str) -> String {
         format!("{}/client/features", api_url)
+    }
+
+    #[cfg(feature = "surf")]
+    pub fn query(
+        project: Option<String>,
+        name_prefix: Option<String>,
+        tags: &Option<Vec<TagFilter>>,
+    ) -> impl Serialize + std::fmt::Debug {
+        FeaturesQuery {
+            project,
+            name_prefix,
+            tags: match tags {
+                Some(tags) => Some(tags.iter().map(|tag| tag.format()).collect()),
+                None => None,
+            },
+        }
+    }
+
+    #[cfg(feature = "reqwest")]
+    pub fn query(
+        project: Option<String>,
+        name_prefix: Option<String>,
+        tags: &Option<Vec<TagFilter>>,
+    ) -> impl Serialize + std::fmt::Debug {
+        let mut query = vec![];
+
+        if let Some(project) = project {
+            query.push(("project", project))
+        }
+
+        if let Some(name_prefix) = name_prefix {
+            query.push(("namePrefix", name_prefix))
+        }
+
+        if let Some(tags) = tags {
+            for tag in tags.iter() {
+                query.push(("tag", tag.format()))
+            }
+        }
+
+        query
     }
 }
 
@@ -133,7 +195,11 @@ pub struct MetricsBucket {
 
 #[cfg(test)]
 mod tests {
-    use super::Registration;
+    use super::{Features, Registration, TagFilter};
+    #[cfg(feature = "surf")]
+    use serde_qs::to_string;
+    #[cfg(feature = "reqwest")]
+    use serde_urlencoded::to_string;
 
     #[test]
     fn parse_reference_doc() -> Result<(), serde_json::Error> {
@@ -209,7 +275,7 @@ mod tests {
       ]
     }
     "#;
-        let parsed: super::Features = serde_json::from_str(data)?;
+        let parsed: Features = serde_json::from_str(data)?;
         assert_eq!(1, parsed.version);
         Ok(())
     }
@@ -223,5 +289,36 @@ mod tests {
             interval: 5000,
             ..Default::default()
         };
+    }
+
+    #[test]
+    fn test_features_query() {
+        let query = Features::query(
+            Some("myproject".into()),
+            Some("prefix".into()),
+            &Some(vec![
+                TagFilter {
+                    name: "simple".into(),
+                    value: "taga".into(),
+                },
+                TagFilter {
+                    name: "simple".into(),
+                    value: "tagb".into(),
+                },
+            ]),
+        );
+
+        let serialized = to_string(&query).unwrap();
+
+        #[cfg(feature = "surf")]
+        assert_eq!(
+            "project=myproject&namePrefix=prefix&tag[0]=simple%3Ataga&tag[1]=simple%3Atagb",
+            serialized
+        );
+        #[cfg(feature = "reqwest")]
+        assert_eq!(
+            "project=myproject&namePrefix=prefix&tag=simple%3Ataga&tag=simple%3Atagb",
+            serialized
+        );
     }
 }

@@ -35,6 +35,13 @@ impl HttpClient for surf::Client {
         builder.header(key.clone(), value)
     }
 
+    fn query(
+        builder: Self::RequestBuilder,
+        query: &impl Serialize,
+    ) -> Result<Self::RequestBuilder, Self::Error> {
+        builder.query(&query).map_err(SurfStdError)
+    }
+
     async fn get_json<T: DeserializeOwned>(req: Self::RequestBuilder) -> Result<T, Self::Error> {
         req.recv_json::<T>().await.map_err(SurfStdError)
     }
