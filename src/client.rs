@@ -1398,7 +1398,7 @@ mod tests {
             .with_project_name(project_name)
             .with_name_prefix(name_prefix)
             .with_tags(tags)
-            .into_client::<NoFeatures, HttpClient>(&api_url, &app_name, &instance_id, None)
+            .into_client::<NoFeatures, HttpClient>(api_url, app_name, instance_id, None)
             .unwrap();
 
         impl PartialEq for Client<NoFeatures, HttpClient> {

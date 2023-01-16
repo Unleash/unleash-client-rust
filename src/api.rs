@@ -48,14 +48,11 @@ impl Features {
         FeaturesQuery {
             project,
             name_prefix,
-            tags: match tags {
-                Some(tags) => Some(tags.iter().map(|tag| tag.format()).collect()),
-                None => None,
-            },
+            tags: tags.as_ref().map(|tags| tags.iter().map(|tag| tag.format()).collect()),
         }
     }
 
-    #[cfg(feature = "reqwest")]
+    #[cfg(not(feature = "surf"))]
     pub fn query(
         project: Option<String>,
         name_prefix: Option<String>,
@@ -198,7 +195,7 @@ mod tests {
     use super::{Features, Registration, TagFilter};
     #[cfg(feature = "surf")]
     use serde_qs::to_string;
-    #[cfg(feature = "reqwest")]
+    #[cfg(not(feature = "surf"))]
     use serde_urlencoded::to_string;
 
     #[test]
@@ -315,7 +312,7 @@ mod tests {
             "project=myproject&namePrefix=prefix&tag[0]=simple%3Ataga&tag[1]=simple%3Atagb",
             serialized
         );
-        #[cfg(feature = "reqwest")]
+        #[cfg(not(feature = "surf"))]
         assert_eq!(
             "project=myproject&namePrefix=prefix&tag=simple%3Ataga&tag=simple%3Atagb",
             serialized
