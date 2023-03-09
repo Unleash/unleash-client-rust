@@ -101,10 +101,17 @@ pub fn partial_rollout(group: &str, variable: Option<&String>, rollout: u32) -> 
     } else {
         return false;
     };
-    if let Ok(normalised) = normalised_hash(group, variable, 100) {
-        rollout > normalised
-    } else {
-        false
+    match rollout {
+        // No need to hash when set to 0 or 100
+        0 => false,
+        100 => true,
+        rollout => {
+            if let Ok(normalised) = normalised_hash(group, variable, 100) {
+                rollout > normalised
+            } else {
+                false
+            }
+        }
     }
 }
 
@@ -171,8 +178,7 @@ pub fn flexible_rollout<S: BuildHasher>(
                 } else if context.session_id.is_some() {
                     partial_rollout(&group, context.session_id.as_ref(), rollout)
                 } else {
-                    let picked = rand::thread_rng().gen_range(0..100);
-                    rollout > picked
+                    pick_random(rollout as u8)
                 }
             })
         }
@@ -197,6 +203,20 @@ pub fn session_id<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>
     _session_id(parameters, "percentage")
 }
 
+/// Perform the is-enabled check for a random rollout of pct.
+fn pick_random(pct: u8) -> bool {
+    match pct {
+        0 => false,
+        100 => true,
+        pct => {
+            let mut rng = rand::thread_rng();
+            // generates 0's but not 100's.
+            let picked = rng.gen_range(0..100);
+            pct > picked
+        }
+    }
+}
+
 // Build a closure to handle random rollouts, parameterised by a
 // metaparameter of the percentage taken from rollout_key.
 pub fn _random<S: BuildHasher>(
@@ -211,11 +231,7 @@ pub fn _random<S: BuildHasher>(
             }
         }
     }
-    Box::new(move |_: &Context| -> bool {
-        let mut rng = rand::thread_rng();
-        let picked = rng.gen_range(0..100);
-        pct > picked
-    })
+    Box::new(move |_: &Context| -> bool { pick_random(pct) })
 }
 
 /// <https://docs.getunleash.io/user_guide/activation_strategy#gradualrolloutrandom-deprecated-from-v4---use-gradual-rollout-instead>
@@ -668,6 +684,12 @@ mod tests {
         };
         let c: Context = Default::default();
         assert!(super::flexible_rollout(Some(params))(&c));
+        let params: HashMap<String, String> = hashmap! {
+            "stickiness".into() => "random".into(),
+            "rollout".into() => "0".into(),
+        };
+        let c: Context = Default::default();
+        assert!(!super::flexible_rollout(Some(params))(&c));
 
         // Could parameterise this by SESSION and USER, but its barely long
         // enough to bother and the explicitness in failures has merit.
