@@ -63,7 +63,7 @@ pub enum ConstraintExpression {
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct Variant {
     pub name: String,
-    pub weight: u8,
+    pub weight: u16,
     pub payload: Option<HashMap<String, String>>,
     pub overrides: Option<Vec<VariantOverride>>,
 }
