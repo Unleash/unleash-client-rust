@@ -1,7 +1,9 @@
 // Copyright 2020 Cognite AS
 //! <https://docs.getunleash.io/api/client/features>
+use serde_qs;
 use std::collections::HashMap;
 use std::default::Default;
+use std::fmt::Display;
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -19,14 +21,14 @@ pub struct TagFilter {
     pub value: String,
 }
 
-impl TagFilter {
-    pub fn format(&self) -> String {
-        format!("{}:{}", self.name, self.value)
+impl Display for TagFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}:{}", self.name, self.value)
     }
 }
 
-#[derive(Serialize, Debug)]
-struct FeaturesQuery {
+#[derive(Serialize, Debug, PartialEq, Clone)]
+pub struct FeaturesQuery {
     pub project: Option<String>,
     #[serde(rename = "namePrefix")]
     pub name_prefix: Option<String>,
@@ -34,47 +36,32 @@ struct FeaturesQuery {
     pub tags: Option<Vec<String>>,
 }
 
-impl Features {
-    pub fn endpoint(api_url: &str) -> String {
-        format!("{}/client/features", api_url)
-    }
-
-    #[cfg(feature = "surf")]
-    pub fn query(
+impl FeaturesQuery {
+    pub fn new(
         project: Option<String>,
         name_prefix: Option<String>,
         tags: &Option<Vec<TagFilter>>,
-    ) -> impl Serialize + std::fmt::Debug {
+    ) -> Self {
         FeaturesQuery {
             project,
             name_prefix,
-            tags: tags.as_ref().map(|tags| tags.iter().map(|tag| tag.format()).collect()),
+            tags: tags
+                .as_ref()
+                .map(|tags| tags.iter().map(ToString::to_string).collect()),
         }
     }
+}
 
-    #[cfg(not(feature = "surf"))]
-    pub fn query(
-        project: Option<String>,
-        name_prefix: Option<String>,
-        tags: &Option<Vec<TagFilter>>,
-    ) -> impl Serialize + std::fmt::Debug {
-        let mut query = vec![];
+impl Features {
+    pub fn endpoint(api_url: &str, query: Option<&FeaturesQuery>) -> String {
+        let url = format!("{}/client/features", api_url);
 
-        if let Some(project) = project {
-            query.push(("project", project))
-        }
+        let url = match query {
+            Some(query) => format!("{}?{}", url, serde_qs::to_string(query).unwrap()),
+            None => url,
+        };
 
-        if let Some(name_prefix) = name_prefix {
-            query.push(("namePrefix", name_prefix))
-        }
-
-        if let Some(tags) = tags {
-            for tag in tags.iter() {
-                query.push(("tag", tag.format()))
-            }
-        }
-
-        query
+        url
     }
 }
 
@@ -193,10 +180,7 @@ pub struct MetricsBucket {
 #[cfg(test)]
 mod tests {
     use super::{Features, Registration, TagFilter};
-    #[cfg(feature = "surf")]
-    use serde_qs::to_string;
-    #[cfg(not(feature = "surf"))]
-    use serde_urlencoded::to_string;
+    use crate::api::FeaturesQuery;
 
     #[test]
     fn parse_reference_doc() -> Result<(), serde_json::Error> {
@@ -289,33 +273,28 @@ mod tests {
     }
 
     #[test]
-    fn test_features_query() {
-        let query = Features::query(
-            Some("myproject".into()),
-            Some("prefix".into()),
-            &Some(vec![
-                TagFilter {
-                    name: "simple".into(),
-                    value: "taga".into(),
-                },
-                TagFilter {
-                    name: "simple".into(),
-                    value: "tagb".into(),
-                },
-            ]),
+    fn test_features_endpoint() {
+        let endpoint = Features::endpoint(
+            "http://host.example.com:1234/api",
+            Some(&FeaturesQuery::new(
+                Some("myproject".into()),
+                Some("prefix".into()),
+                &Some(vec![
+                    TagFilter {
+                        name: "simple".into(),
+                        value: "taga".into(),
+                    },
+                    TagFilter {
+                        name: "simple".into(),
+                        value: "tagb".into(),
+                    },
+                ]),
+            )),
         );
 
-        let serialized = to_string(&query).unwrap();
-
-        #[cfg(feature = "surf")]
         assert_eq!(
-            "project=myproject&namePrefix=prefix&tag[0]=simple%3Ataga&tag[1]=simple%3Atagb",
-            serialized
-        );
-        #[cfg(not(feature = "surf"))]
-        assert_eq!(
-            "project=myproject&namePrefix=prefix&tag=simple%3Ataga&tag=simple%3Atagb",
-            serialized
+            "http://host.example.com:1234/api/client/features?project=myproject&namePrefix=prefix&tag[0]=simple%3Ataga&tag[1]=simple%3Atagb",
+            endpoint
         );
     }
 }

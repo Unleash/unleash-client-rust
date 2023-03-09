@@ -33,13 +33,6 @@ impl HttpClient for reqwest::Client {
         builder.header(key.clone(), value)
     }
 
-    fn query(
-        builder: Self::RequestBuilder,
-        query: &impl Serialize,
-    ) -> Result<Self::RequestBuilder, Self::Error> {
-        Ok(builder.query(query))
-    }
-
     async fn get_json<T: DeserializeOwned>(req: Self::RequestBuilder) -> Result<T, Self::Error> {
         req.send().await?.json::<T>().await
     }

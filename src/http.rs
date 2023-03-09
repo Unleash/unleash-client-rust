@@ -43,28 +43,14 @@ where
     }
 
     /// Perform a GET. Returns errors per HttpClient::get.
-    pub fn get(
-        &self,
-        uri: &str,
-        query: Option<&impl Serialize>,
-    ) -> Result<C::RequestBuilder, C::Error> {
+    pub fn get(&self, uri: &str) -> C::RequestBuilder {
         let request = self.client.get(uri);
-
-        let request = match query {
-            Some(query) => C::query(request, query)?,
-            None => request,
-        };
-
-        Ok(self.attach_headers(request))
+        self.attach_headers(request)
     }
 
     /// Make a get request and parse into JSON
-    pub async fn get_json<T: DeserializeOwned>(
-        &self,
-        endpoint: &str,
-        query: Option<&impl Serialize>,
-    ) -> Result<T, C::Error> {
-        C::get_json(self.get(endpoint, query)?).await
+    pub async fn get_json<T: DeserializeOwned>(&self, endpoint: &str) -> Result<T, C::Error> {
+        C::get_json(self.get(endpoint)).await
     }
 
     /// Perform a POST. Returns errors per HttpClient::post.

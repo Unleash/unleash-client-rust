@@ -16,7 +16,9 @@ use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration, TagFilter};
+use crate::api::{
+    self, Feature, Features, FeaturesQuery, Metrics, MetricsBucket, Registration, TagFilter,
+};
 use crate::context::Context;
 use crate::http::{HttpClient, HTTP};
 use crate::strategy;
@@ -92,16 +94,25 @@ impl ClientBuilder {
         })
     }
 
+    /// Only fetch feature toggles belonging to the specified project
+    ///
+    /// <https://docs.getunleash.io/reference/api/legacy/unleash/client/features#filter-feature-toggles>
     pub fn with_project_name(mut self, project_name: String) -> Self {
         self.project_name = Some(project_name);
         self
     }
 
+    /// Only fetch feature toggles with the provided name prefix
+    ///
+    /// <https://docs.getunleash.io/reference/api/legacy/unleash/client/features#filter-feature-toggles>
     pub fn with_name_prefix(mut self, name_prefix: String) -> Self {
         self.name_prefix = Some(name_prefix);
         self
     }
 
+    /// Only fetch feature toggles tagged with the list of tags
+    ///
+    /// <https://docs.getunleash.io/reference/api/legacy/unleash/client/features#filter-feature-toggles>
     pub fn with_tags(mut self, tags: Vec<TagFilter>) -> Self {
         self.tags = Some(tags);
         self
@@ -718,22 +729,19 @@ where
     /// stop_poll is called().
     pub async fn poll_for_updates(&self) {
         // TODO: add an event / pipe to permit immediate exit.
-        let endpoint = Features::endpoint(&self.api_url);
+        let endpoint = Features::endpoint(
+            &self.api_url,
+            Some(&FeaturesQuery::new(
+                self.project_name.clone(),
+                self.name_prefix.clone(),
+                &self.tags,
+            )),
+        );
         let metrics_endpoint = Metrics::endpoint(&self.api_url);
         self.polling.store(true, Ordering::Relaxed);
         loop {
             debug!("poll: retrieving features");
-            let res = self
-                .http
-                .get_json(
-                    &endpoint,
-                    Some(&Features::query(
-                        self.project_name.clone(),
-                        self.name_prefix.clone(),
-                        &self.tags,
-                    )),
-                )
-                .await;
+            let res = self.http.get_json(&endpoint).await;
             if let Ok(res) = res {
                 let features: Features = res;
                 match self.memoize(features.features) {
