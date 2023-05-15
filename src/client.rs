@@ -142,6 +142,7 @@ pub struct CachedFeature {
     // on submission will be the next logical progression.
     enabled: AtomicU64,
     disabled: AtomicU64,
+    variants_counts: HashMap<String, AtomicU64>,
     // Variants for use with get_variant
     variants: Vec<api::Variant>,
 }
@@ -348,10 +349,27 @@ where
                             features: EnumMap::default(),
                             str_features: HashMap::new(),
                         };
+
+                        fn clone_variants_map(
+                            original: &HashMap<String, AtomicU64>,
+                        ) -> HashMap<String, AtomicU64> {
+                            let mut cloned_map = HashMap::new();
+
+                            for (key, value) in original.iter() {
+                                cloned_map.insert(
+                                    key.clone(),
+                                    AtomicU64::new(value.load(Ordering::Relaxed)),
+                                );
+                            }
+
+                            cloned_map
+                        }
+
                         fn cloned_feature(feature: &CachedFeature) -> CachedFeature {
                             CachedFeature {
                                 disabled: AtomicU64::new(feature.disabled.load(Ordering::Relaxed)),
                                 enabled: AtomicU64::new(feature.enabled.load(Ordering::Relaxed)),
+                                variants_counts: clone_variants_map(&feature.variants_counts),
                                 known: feature.known,
                                 feature_disabled: feature.feature_disabled,
                                 strategies: feature.strategies.clone(),
@@ -369,6 +387,7 @@ where
                         let stub_feature = CachedFeature {
                             disabled: AtomicU64::new(if default { 0 } else { 1 }),
                             enabled: AtomicU64::new(if default { 1 } else { 0 }),
+                            variants_counts: HashMap::new(),
                             known: false,
                             feature_disabled: false,
                             strategies: vec![],
@@ -593,6 +612,7 @@ where
                         strategies,
                         disabled: AtomicU64::new(0),
                         enabled: AtomicU64::new(0),
+                        variants_counts: HashMap::new(),
                         known: true,
                         feature_disabled: true,
                         variants: vec![],
@@ -622,6 +642,7 @@ where
                         strategies,
                         disabled: AtomicU64::new(0),
                         enabled: AtomicU64::new(0),
+                        variants_counts: HashMap::new(),
                         known: true,
                         feature_disabled: false,
                         variants,
@@ -817,6 +838,7 @@ mod tests {
     use std::collections::hash_set::HashSet;
     use std::default::Default;
     use std::hash::BuildHasher;
+    use std::sync::atomic::Ordering;
 
     use enum_map::Enum;
     use maplit::hashmap;
@@ -1318,5 +1340,168 @@ mod tests {
         assert_eq!(variant2, c.get_variant_str("two", &uid1));
         assert_eq!(variant2, c.get_variant_str("two", &session1));
         assert_eq!(variant1, c.get_variant_str("two", &host1));
+    }
+
+    #[test]
+    fn variant_metrics() {
+        let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
+            .with_module_level("isahc::agent", log::LevelFilter::Off)
+            .with_module_level("tracing::span", log::LevelFilter::Off)
+            .with_module_level("tracing::span::active", log::LevelFilter::Off)
+            .init();
+        let f = variant_features();
+        // with an enum
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum UserFeatures {
+            disabled,
+            novariants,
+            one,
+            two,
+        }
+        let c = ClientBuilder::default()
+            .into_client::<UserFeatures, HttpClient>("http://127.0.0.1:1234/", "foo", "test", None)
+            .unwrap();
+
+        c.memoize(f.features).unwrap();
+
+        c.get_variant(UserFeatures::disabled, &Context::default());
+        assert_eq!(
+            c.cached_state().clone().unwrap().features[UserFeatures::disabled]
+                .variants_counts
+                .get("disabled")
+                .unwrap()
+                .load(Ordering::Relaxed),
+            1
+        );
+
+        c.get_variant(UserFeatures::novariants, &Context::default());
+        assert_eq!(
+            c.cached_state().clone().unwrap().features[UserFeatures::novariants]
+                .variants_counts
+                .get("disabled")
+                .unwrap()
+                .load(Ordering::Relaxed),
+            1
+        );
+
+        let session1: Context = Context {
+            session_id: Some("session1".into()),
+            ..Default::default()
+        };
+
+        let host1: Context = Context {
+            remote_address: Some(IPAddress("10.10.10.10".parse().unwrap())),
+            ..Default::default()
+        };
+        c.get_variant(UserFeatures::two, &session1);
+        c.get_variant(UserFeatures::two, &host1);
+        assert_eq!(
+            c.cached_state().clone().unwrap().features[UserFeatures::two]
+                .variants_counts
+                .get("variantone")
+                .unwrap()
+                .load(Ordering::Relaxed),
+            1
+        );
+
+        assert_eq!(
+            c.cached_state().clone().unwrap().features[UserFeatures::two]
+                .variants_counts
+                .get("varianttwo")
+                .unwrap()
+                .load(Ordering::Relaxed),
+            1
+        );
+    }
+
+    #[test]
+    fn variant_str_metrics() {
+        let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
+            .with_module_level("isahc::agent", log::LevelFilter::Off)
+            .with_module_level("tracing::span", log::LevelFilter::Off)
+            .with_module_level("tracing::span::active", log::LevelFilter::Off)
+            .init();
+        let f = variant_features();
+        // without the enum API
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum NoFeatures {}
+        let c = ClientBuilder::default()
+            .enable_string_features()
+            .into_client::<NoFeatures, HttpClient>("http://127.0.0.1:1234/", "foo", "test", None)
+            .unwrap();
+
+        c.memoize(f.features).unwrap();
+
+        c.get_variant_str("disabled", &Context::default());
+        assert_eq!(
+            c.cached_state()
+                .clone()
+                .unwrap()
+                .str_features
+                .get("disabled")
+                .unwrap()
+                .variants_counts
+                .get("disabled")
+                .unwrap()
+                .load(Ordering::Relaxed),
+            1
+        );
+
+        c.get_variant_str("novariants", &Context::default());
+        assert_eq!(
+            c.cached_state()
+                .clone()
+                .unwrap()
+                .str_features
+                .get("novariants")
+                .unwrap()
+                .variants_counts
+                .get("disabled")
+                .unwrap()
+                .load(Ordering::Relaxed),
+            1
+        );
+
+        let session1: Context = Context {
+            session_id: Some("session1".into()),
+            ..Default::default()
+        };
+
+        let host1: Context = Context {
+            remote_address: Some(IPAddress("10.10.10.10".parse().unwrap())),
+            ..Default::default()
+        };
+        c.get_variant_str("two", &session1);
+        c.get_variant_str("two", &host1);
+        assert_eq!(
+            c.cached_state()
+                .clone()
+                .unwrap()
+                .str_features
+                .get("two")
+                .unwrap()
+                .variants_counts
+                .get("variantone")
+                .unwrap()
+                .load(Ordering::Relaxed),
+            1
+        );
+
+        assert_eq!(
+            c.cached_state()
+                .clone()
+                .unwrap()
+                .str_features
+                .get("two")
+                .unwrap()
+                .variants_counts
+                .get("varianttwo")
+                .unwrap()
+                .load(Ordering::Relaxed),
+            1
+        );
     }
 }
