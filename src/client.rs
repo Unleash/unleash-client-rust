@@ -143,19 +143,19 @@ pub struct CachedFeature {
     // on submission will be the next logical progression.
     enabled: AtomicU64,
     disabled: AtomicU64,
-    variants_counts: DashMap<String, u64>,
+    variant_metrics: DashMap<String, u64>,
     // Variants for use with get_variant
     variants: Vec<api::Variant>,
 }
 
 impl CachedFeature {
     fn count_variant(&self, variant_name: &str) {
-        match self.variants_counts.get(variant_name.into()) {
+        match self.variant_metrics.get(variant_name.into()) {
             None => {
-                self.variants_counts.insert(variant_name.into(), 1);
+                self.variant_metrics.insert(variant_name.into(), 1);
             }
             Some(count) => {
-                self.variants_counts.insert(variant_name.into(), *count + 1);
+                self.variant_metrics.insert(variant_name.into(), *count + 1);
             }
         };
     }
@@ -368,7 +368,7 @@ where
                             CachedFeature {
                                 disabled: AtomicU64::new(feature.disabled.load(Ordering::Relaxed)),
                                 enabled: AtomicU64::new(feature.enabled.load(Ordering::Relaxed)),
-                                variants_counts: feature.variants_counts.clone(),
+                                variant_metrics: feature.variant_metrics.clone(),
                                 known: feature.known,
                                 feature_disabled: feature.feature_disabled,
                                 strategies: feature.strategies.clone(),
@@ -388,7 +388,7 @@ where
                         let stub_feature = CachedFeature {
                             disabled: AtomicU64::new(if default { 0 } else { 1 }),
                             enabled: AtomicU64::new(if default { 1 } else { 0 }),
-                            variants_counts,
+                            variant_metrics: variants_counts,
                             known: false,
                             feature_disabled: false,
                             strategies: vec![],
@@ -620,7 +620,7 @@ where
                         strategies,
                         disabled: AtomicU64::new(0),
                         enabled: AtomicU64::new(0),
-                        variants_counts: DashMap::new(),
+                        variant_metrics: DashMap::new(),
                         known: true,
                         feature_disabled: true,
                         variants: vec![],
@@ -650,7 +650,7 @@ where
                         strategies,
                         disabled: AtomicU64::new(0),
                         enabled: AtomicU64::new(0),
-                        variants_counts: DashMap::new(),
+                        variant_metrics: DashMap::new(),
                         known: true,
                         feature_disabled: false,
                         variants,
@@ -685,8 +685,8 @@ where
                     ToggleMetrics {
                         yes: feature.enabled.load(Ordering::Relaxed),
                         no: feature.disabled.load(Ordering::Relaxed),
-                        variants: if feature.variants_counts.len() > 0 {
-                            Some(feature.variants_counts.clone().into_iter().collect())
+                        variants: if feature.variant_metrics.len() > 0 {
+                            Some(feature.variant_metrics.clone().into_iter().collect())
                         } else {
                             None
                         },
@@ -699,8 +699,8 @@ where
                     ToggleMetrics {
                         yes: feature.enabled.load(Ordering::Relaxed),
                         no: feature.disabled.load(Ordering::Relaxed),
-                        variants: if feature.variants_counts.len() > 0 {
-                            Some(feature.variants_counts.clone().into_iter().collect())
+                        variants: if feature.variant_metrics.len() > 0 {
+                            Some(feature.variant_metrics.clone().into_iter().collect())
                         } else {
                             None
                         },
@@ -1379,7 +1379,7 @@ mod tests {
 
         let get_variant_count = |feature_name, variant_name| -> u64 {
             *c.cached_state().clone().expect("No cached state").features[feature_name]
-                .variants_counts
+                .variant_metrics
                 .get(variant_name)
                 .expect("No variant called '{variant_name}'")
                 .value()
@@ -1434,7 +1434,7 @@ mod tests {
                 .str_features
                 .get(feature_name)
                 .expect("No feature called '{feature_name}'")
-                .variants_counts
+                .variant_metrics
                 .get(variant_name)
                 .expect("No variant called '{variant_name}'")
                 .value()
