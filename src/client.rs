@@ -158,9 +158,6 @@ impl CachedFeature {
                 self.variants_counts.insert(variant_name.into(), *count + 1);
             }
         };
-        // .and_modify(|count| {        //     *count + 1;
-        // })
-        // .or_insert(1);
     }
 }
 
