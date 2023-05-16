@@ -383,10 +383,12 @@ where
                                 .str_features
                                 .insert(name.clone(), cloned_feature(feature));
                         }
+                        let variants_counts = DashMap::with_capacity(1);
+                        variants_counts.insert("disabled".into(), 1_u64);
                         let stub_feature = CachedFeature {
                             disabled: AtomicU64::new(if default { 0 } else { 1 }),
                             enabled: AtomicU64::new(if default { 1 } else { 0 }),
-                            variants_counts: DashMap::new(),
+                            variants_counts,
                             known: false,
                             feature_disabled: false,
                             strategies: vec![],
@@ -1457,5 +1459,12 @@ mod tests {
         assert_eq!(get_variant_count("two", "variantone"), 1);
 
         assert_eq!(get_variant_count("two", "varianttwo"), 1);
+
+        // Metrics should also be tracked for features that don't exist
+        c.get_variant_str("nonexistant-feature", &Context::default());
+        assert_eq!(get_variant_count("nonexistant-feature", "disabled"), 1);
+
+        c.get_variant_str("nonexistant-feature", &Context::default());
+        assert_eq!(get_variant_count("nonexistant-feature", "disabled"), 2);
     }
 }
