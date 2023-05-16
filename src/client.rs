@@ -147,6 +147,17 @@ pub struct CachedFeature {
     variants: Vec<api::Variant>,
 }
 
+impl CachedFeature {
+    fn count_variant(&mut self, variant_name: &str) {
+        self.variants_counts
+            .entry(variant_name.into())
+            .and_modify(|count| {
+                count.fetch_add(1, Ordering::Relaxed);
+            })
+            .or_insert(1.into());
+    }
+}
+
 pub struct CachedState<F>
 where
     F: EnumArray<CachedFeature>,
@@ -492,18 +503,19 @@ where
                 );
                 Variant::disabled()
             }
-            Some(feature) => self._get_variant(feature, &feature_name, context),
+            Some(mut feature) => self._get_variant(feature, &feature_name, context),
         }
     }
 
     fn _get_variant<N: Debug + Display>(
         &self,
-        feature: &CachedFeature,
+        feature: &mut CachedFeature,
         feature_name: N,
         context: &Context,
     ) -> Variant {
         if feature.variants.is_empty() {
             trace!("get_variant: feature {:?} no variants", feature_name);
+            feature.count_variant(&"disabled");
             return Variant::disabled();
         }
         let group = format!("{}", feature_name);
@@ -527,11 +539,13 @@ where
             );
             let mut rng = rand::thread_rng();
             let picked = rng.gen_range(0..feature.variants.len());
-            return (&feature.variants[picked]).into();
+            let variant_name = feature.variants[picked];
+            feature.count_variant(&variant_name.name);
+            return (&variant_name).into();
         }
         let identifier = identifier.unwrap();
         let total_weight = feature.variants.iter().map(|v| v.weight as u32).sum();
-        strategy::normalised_hash(&group, identifier, total_weight)
+        let selected_variant = strategy::normalised_hash(&group, identifier, total_weight)
             .map(|selected_weight| {
                 let mut counter: u32 = 0;
                 for variant in feature.variants.iter().as_ref() {
@@ -542,7 +556,9 @@ where
                 }
                 Variant::disabled()
             })
-            .unwrap_or_else(|_| Variant::disabled())
+            .unwrap_or_else(|_| Variant::disabled());
+        feature.count_variant(&selected_variant.name);
+        selected_variant
     }
 
     pub fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
