@@ -485,7 +485,6 @@ where
             feature.map(|f| f.count_variant("disabled"));
             return Variant::disabled();
         }
-        let feature = &cache.str_features.get(feature_name);
         match feature {
             None => {
                 trace!(
