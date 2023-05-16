@@ -17,7 +17,7 @@ use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration};
+use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration, ToggleMetrics};
 use crate::context::Context;
 use crate::http::{HttpClient, HTTP};
 use crate::strategy;
@@ -684,25 +684,29 @@ where
                 bucket.toggles.insert(
                     // Is this unwrap safe? Not sure.
                     serde_plain::to_string(&key).unwrap(),
-                    [
-                        ("yes".into(), feature.enabled.load(Ordering::Relaxed)),
-                        ("no".into(), feature.disabled.load(Ordering::Relaxed)),
-                    ]
-                    .iter()
-                    .cloned()
-                    .collect(),
+                    ToggleMetrics {
+                        yes: feature.enabled.load(Ordering::Relaxed),
+                        no: feature.disabled.load(Ordering::Relaxed),
+                        variants: if feature.variants_counts.len() > 0 {
+                            Some(feature.variants_counts.clone().into_iter().collect())
+                        } else {
+                            None
+                        },
+                    },
                 );
             }
             for (name, feature) in &old.str_features {
                 bucket.toggles.insert(
                     name.clone(),
-                    [
-                        ("yes".into(), feature.enabled.load(Ordering::Relaxed)),
-                        ("no".into(), feature.disabled.load(Ordering::Relaxed)),
-                    ]
-                    .iter()
-                    .cloned()
-                    .collect(),
+                    ToggleMetrics {
+                        yes: feature.enabled.load(Ordering::Relaxed),
+                        no: feature.disabled.load(Ordering::Relaxed),
+                        variants: if feature.variants_counts.len() > 0 {
+                            Some(feature.variants_counts.clone().into_iter().collect())
+                        } else {
+                            None
+                        },
+                    },
                 );
             }
             let metrics = Metrics {

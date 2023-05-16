@@ -124,11 +124,18 @@ impl Metrics {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct ToggleMetrics {
+    pub yes: u64,
+    pub no: u64,
+    pub variants: Option<HashMap<String, u64>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MetricsBucket {
     pub start: chrono::DateTime<chrono::Utc>,
     pub stop: chrono::DateTime<chrono::Utc>,
     /// name: "yes"|"no": count
-    pub toggles: HashMap<String, HashMap<String, u64>>,
+    pub toggles: HashMap<String, ToggleMetrics>,
 }
 
 #[cfg(test)]
