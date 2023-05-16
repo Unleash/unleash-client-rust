@@ -143,21 +143,19 @@ pub struct CachedFeature {
     // on submission will be the next logical progression.
     enabled: AtomicU64,
     disabled: AtomicU64,
-    variant_metrics: DashMap<String, u64>,
+    variant_metrics: DashMap<String, AtomicU64>,
     // Variants for use with get_variant
     variants: Vec<api::Variant>,
 }
 
 impl CachedFeature {
     fn count_variant(&self, variant_name: &str) {
-        match self.variant_metrics.get(variant_name.into()) {
-            None => {
-                self.variant_metrics.insert(variant_name.into(), 1);
-            }
-            Some(count) => {
-                self.variant_metrics.insert(variant_name.into(), *count + 1);
-            }
-        };
+        self.variant_metrics
+            .entry(variant_name.into())
+            .and_modify(|count| {
+                count.fetch_add(1, Ordering::Relaxed);
+            })
+            .or_insert(AtomicU64::new(1));
     }
 }
 
@@ -364,11 +362,28 @@ where
                             str_features: HashMap::new(),
                         };
 
+                        fn clone_variants_map(
+                            original: &DashMap<String, AtomicU64>,
+                        ) -> DashMap<String, AtomicU64> {
+                            let cloned_map = DashMap::new();
+
+                            for reference in original.iter() {
+                                let key = reference.key();
+                                let value = reference.value();
+                                cloned_map.insert(
+                                    key.clone(),
+                                    AtomicU64::new(value.load(Ordering::Relaxed)),
+                                );
+                            }
+
+                            cloned_map
+                        }
+
                         fn cloned_feature(feature: &CachedFeature) -> CachedFeature {
                             CachedFeature {
                                 disabled: AtomicU64::new(feature.disabled.load(Ordering::Relaxed)),
                                 enabled: AtomicU64::new(feature.enabled.load(Ordering::Relaxed)),
-                                variant_metrics: feature.variant_metrics.clone(),
+                                variant_metrics: clone_variants_map(&feature.variant_metrics),
                                 known: feature.known,
                                 feature_disabled: feature.feature_disabled,
                                 strategies: feature.strategies.clone(),
@@ -384,7 +399,7 @@ where
                                 .insert(name.clone(), cloned_feature(feature));
                         }
                         let variants_counts = DashMap::with_capacity(1);
-                        variants_counts.insert("disabled".into(), 1_u64);
+                        variants_counts.insert(String::from("disabled"), AtomicU64::new(1));
                         let stub_feature = CachedFeature {
                             disabled: AtomicU64::new(if default { 0 } else { 1 }),
                             enabled: AtomicU64::new(if default { 1 } else { 0 }),
@@ -678,6 +693,18 @@ where
                 stop: now,
                 toggles: HashMap::new(),
             };
+
+            fn clone_variants_map(original: &DashMap<String, AtomicU64>) -> HashMap<String, u64> {
+                let mut cloned_map = HashMap::new();
+
+                for reference in original.iter() {
+                    let key = reference.key();
+                    let value = reference.value();
+                    cloned_map.insert(key.clone(), value.load(Ordering::Relaxed));
+                }
+
+                cloned_map
+            }
             for (key, feature) in &old.features {
                 bucket.toggles.insert(
                     // Is this unwrap safe? Not sure.
@@ -686,13 +713,14 @@ where
                         yes: feature.enabled.load(Ordering::Relaxed),
                         no: feature.disabled.load(Ordering::Relaxed),
                         variants: if feature.variant_metrics.len() > 0 {
-                            Some(feature.variant_metrics.clone().into_iter().collect())
+                            Some(clone_variants_map(&feature.variant_metrics))
                         } else {
                             None
                         },
                     },
                 );
             }
+
             for (name, feature) in &old.str_features {
                 bucket.toggles.insert(
                     name.clone(),
@@ -700,7 +728,7 @@ where
                         yes: feature.enabled.load(Ordering::Relaxed),
                         no: feature.disabled.load(Ordering::Relaxed),
                         variants: if feature.variant_metrics.len() > 0 {
-                            Some(feature.variant_metrics.clone().into_iter().collect())
+                            Some(clone_variants_map(&feature.variant_metrics))
                         } else {
                             None
                         },
@@ -850,6 +878,7 @@ mod tests {
     use std::collections::hash_set::HashSet;
     use std::default::Default;
     use std::hash::BuildHasher;
+    use std::sync::atomic::Ordering;
 
     use enum_map::Enum;
     use maplit::hashmap;
@@ -1378,11 +1407,12 @@ mod tests {
         c.memoize(f.features).unwrap();
 
         let get_variant_count = |feature_name, variant_name| -> u64 {
-            *c.cached_state().clone().expect("No cached state").features[feature_name]
+            c.cached_state().clone().expect("No cached state").features[feature_name]
                 .variant_metrics
                 .get(variant_name)
                 .expect("No variant called '{variant_name}'")
                 .value()
+                .load(Ordering::Relaxed)
         };
 
         c.get_variant(UserFeatures::disabled, &Context::default());
@@ -1428,7 +1458,7 @@ mod tests {
         c.get_variant_str("disabled", &Context::default());
 
         let get_variant_count = |feature_name, variant_name| -> u64 {
-            *c.cached_state()
+            c.cached_state()
                 .clone()
                 .expect("No cached state")
                 .str_features
@@ -1438,6 +1468,7 @@ mod tests {
                 .get(variant_name)
                 .expect("No variant called '{variant_name}'")
                 .value()
+                .load(Ordering::Relaxed)
         };
 
         assert_eq!(get_variant_count("disabled", "disabled"), 1);
