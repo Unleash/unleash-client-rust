@@ -448,10 +448,11 @@ where
             Some(cache) => cache,
         };
         let enabled = cache.is_enabled(feature_enum.clone(), Some(context), false);
+        let feature = &cache.features[feature_enum.clone()];
         if !enabled {
+            feature.count_variant("disabled");
             return Variant::disabled();
         }
-        let feature = &cache.features[feature_enum.clone()];
         let str_f = EnumToString(&feature_enum);
         self._get_variant(feature, &str_f, context)
     }
@@ -1374,25 +1375,19 @@ mod tests {
 
         c.memoize(f.features).unwrap();
 
-        c.get_variant(UserFeatures::disabled, &Context::default());
-        assert_eq!(
-            *c.cached_state().clone().unwrap().features[UserFeatures::disabled]
+        let get_variant_count = |feature_name, variant_name| -> u64 {
+            *c.cached_state().clone().expect("No cached state").features[feature_name]
                 .variants_counts
-                .get("disabled")
-                .unwrap()
-                .value(),
-            1
-        );
+                .get(variant_name)
+                .expect("No variant called '{variant_name}'")
+                .value()
+        };
+
+        c.get_variant(UserFeatures::disabled, &Context::default());
+        assert_eq!(get_variant_count(UserFeatures::disabled, "disabled"), 1);
 
         c.get_variant(UserFeatures::novariants, &Context::default());
-        assert_eq!(
-            *c.cached_state().clone().unwrap().features[UserFeatures::novariants]
-                .variants_counts
-                .get("disabled")
-                .unwrap()
-                .value(),
-            1
-        );
+        assert_eq!(get_variant_count(UserFeatures::novariants, "disabled"), 1);
 
         let session1: Context = Context {
             session_id: Some("session1".into()),
@@ -1405,23 +1400,8 @@ mod tests {
         };
         c.get_variant(UserFeatures::two, &session1);
         c.get_variant(UserFeatures::two, &host1);
-        assert_eq!(
-            *c.cached_state().clone().unwrap().features[UserFeatures::two]
-                .variants_counts
-                .get("variantone")
-                .unwrap()
-                .value(),
-            1
-        );
-
-        assert_eq!(
-            *c.cached_state().clone().unwrap().features[UserFeatures::two]
-                .variants_counts
-                .get("varianttwo")
-                .unwrap()
-                .value(),
-            1
-        );
+        assert_eq!(get_variant_count(UserFeatures::two, "variantone"), 1);
+        assert_eq!(get_variant_count(UserFeatures::two, "varianttwo"), 1);
     }
 
     #[test]
