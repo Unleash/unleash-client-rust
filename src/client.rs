@@ -162,15 +162,14 @@ impl CachedFeature {
 impl From<&CachedFeature> for ToggleMetrics {
     fn from(feature: &CachedFeature) -> Self {
         fn convert_variants_count(original: &DashMap<String, AtomicU64>) -> HashMap<String, u64> {
-            let mut cloned_map = HashMap::new();
-
-            for reference in original.iter() {
-                let key = reference.key();
-                let value = reference.value();
-                cloned_map.insert(key.clone(), value.load(Ordering::Relaxed));
-            }
-
-            cloned_map
+            original
+                .iter()
+                .map(|item| {
+                    let (key, value) = item.pair();
+                    let count = value.load(Ordering::Relaxed);
+                    (key.clone(), count)
+                })
+                .collect()
         }
 
         ToggleMetrics {
@@ -391,18 +390,14 @@ where
                         fn clone_variants_map(
                             original: &DashMap<String, AtomicU64>,
                         ) -> DashMap<String, AtomicU64> {
-                            let cloned_map = DashMap::new();
-
-                            for reference in original.iter() {
-                                let key = reference.key();
-                                let value = reference.value();
-                                cloned_map.insert(
-                                    key.clone(),
-                                    AtomicU64::new(value.load(Ordering::Relaxed)),
-                                );
-                            }
-
-                            cloned_map
+                            original
+                                .iter()
+                                .map(|item| {
+                                    let (key, value) = item.pair();
+                                    let count = AtomicU64::new(value.load(Ordering::Relaxed));
+                                    (key.clone(), count)
+                                })
+                                .collect()
                         }
 
                         fn cloned_feature(feature: &CachedFeature) -> CachedFeature {
