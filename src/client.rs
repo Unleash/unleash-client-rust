@@ -1495,10 +1495,10 @@ mod tests {
     fn cached_feature_into_toggle_metrics() {
         let variant_counts = [("a", 36), ("b", 16), ("c", 42)];
 
-        let variant_metrics = DashMap::new();
-        for (variant, count) in variant_counts {
-            variant_metrics.insert(variant.into(), AtomicU64::new(count));
-        }
+        let variant_metrics = variant_counts
+            .iter()
+            .map(|(variant, count)| ((*variant).into(), AtomicU64::new(*count)))
+            .collect();
 
         let yes_count = 85;
         let no_count = 364;
