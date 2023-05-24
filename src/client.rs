@@ -159,9 +159,9 @@ impl CachedFeature {
     }
 }
 
-impl Into<ToggleMetrics> for CachedFeature {
+impl Into<ToggleMetrics> for &CachedFeature {
     fn into(self) -> ToggleMetrics {
-        fn clone_variants_map(original: &DashMap<String, AtomicU64>) -> HashMap<String, u64> {
+        fn convert_variants_count(original: &DashMap<String, AtomicU64>) -> HashMap<String, u64> {
             let mut cloned_map = HashMap::new();
 
             for reference in original.iter() {
@@ -177,7 +177,7 @@ impl Into<ToggleMetrics> for CachedFeature {
             yes: self.enabled.load(Ordering::Relaxed),
             no: self.disabled.load(Ordering::Relaxed),
             variants: if self.variant_metrics.len() > 0 {
-                Some(clone_variants_map(&self.variant_metrics))
+                Some(convert_variants_count(&self.variant_metrics))
             } else {
                 None
             },
@@ -720,46 +720,16 @@ where
                 toggles: HashMap::new(),
             };
 
-            fn clone_variants_map(original: &DashMap<String, AtomicU64>) -> HashMap<String, u64> {
-                let mut cloned_map = HashMap::new();
-
-                for reference in original.iter() {
-                    let key = reference.key();
-                    let value = reference.value();
-                    cloned_map.insert(key.clone(), value.load(Ordering::Relaxed));
-                }
-
-                cloned_map
-            }
             for (key, feature) in &old.features {
                 bucket.toggles.insert(
                     // Is this unwrap safe? Not sure.
                     serde_plain::to_string(&key).unwrap(),
-                    ToggleMetrics {
-                        yes: feature.enabled.load(Ordering::Relaxed),
-                        no: feature.disabled.load(Ordering::Relaxed),
-                        variants: if feature.variant_metrics.len() > 0 {
-                            Some(clone_variants_map(&feature.variant_metrics))
-                        } else {
-                            None
-                        },
-                    },
+                    feature.into(),
                 );
             }
 
             for (name, feature) in &old.str_features {
-                bucket.toggles.insert(
-                    name.clone(),
-                    ToggleMetrics {
-                        yes: feature.enabled.load(Ordering::Relaxed),
-                        no: feature.disabled.load(Ordering::Relaxed),
-                        variants: if feature.variant_metrics.len() > 0 {
-                            Some(clone_variants_map(&feature.variant_metrics))
-                        } else {
-                            None
-                        },
-                    },
-                );
+                bucket.toggles.insert(name.clone(), feature.into());
             }
             let metrics = Metrics {
                 app_name: self.app_name.clone(),
@@ -1548,12 +1518,12 @@ mod tests {
             variants: vec![],
         };
 
-        let metrics: ToggleMetrics = feature.into();
-        let converted_metrics = metrics.variants.as_ref().unwrap();
+        let metrics: ToggleMetrics = (&feature).into();
 
         assert_eq!(metrics.yes, yes_count);
         assert_eq!(metrics.no, no_count);
 
+        let converted_metrics = metrics.variants.unwrap();
         for (variant, count) in variant_counts {
             assert_eq!(*converted_metrics.get(variant).unwrap(), count);
         }
