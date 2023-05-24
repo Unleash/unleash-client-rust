@@ -159,6 +159,32 @@ impl CachedFeature {
     }
 }
 
+impl Into<ToggleMetrics> for CachedFeature {
+    fn into(self) -> ToggleMetrics {
+        fn clone_variants_map(original: &DashMap<String, AtomicU64>) -> HashMap<String, u64> {
+            let mut cloned_map = HashMap::new();
+
+            for reference in original.iter() {
+                let key = reference.key();
+                let value = reference.value();
+                cloned_map.insert(key.clone(), value.load(Ordering::Relaxed));
+            }
+
+            cloned_map
+        }
+
+        ToggleMetrics {
+            yes: self.enabled.load(Ordering::Relaxed),
+            no: self.disabled.load(Ordering::Relaxed),
+            variants: if self.variant_metrics.len() > 0 {
+                Some(clone_variants_map(&self.variant_metrics))
+            } else {
+                None
+            },
+        }
+    }
+}
+
 pub struct CachedState<F>
 where
     F: EnumArray<CachedFeature>,
@@ -878,14 +904,15 @@ mod tests {
     use std::collections::hash_set::HashSet;
     use std::default::Default;
     use std::hash::BuildHasher;
-    use std::sync::atomic::Ordering;
+    use std::sync::atomic::{AtomicU64, Ordering};
 
+    use dashmap::DashMap;
     use enum_map::Enum;
     use maplit::hashmap;
     use serde::{Deserialize, Serialize};
 
-    use super::{ClientBuilder, Variant};
-    use crate::api::{self, Feature, Features, Strategy};
+    use super::{CachedFeature, ClientBuilder, Variant};
+    use crate::api::{self, Feature, Features, Strategy, ToggleMetrics};
     use crate::context::{Context, IPAddress};
     use crate::strategy;
 
@@ -1497,5 +1524,38 @@ mod tests {
 
         c.get_variant_str("nonexistant-feature", &Context::default());
         assert_eq!(get_variant_count("nonexistant-feature", "disabled"), 2);
+    }
+
+    #[test]
+    fn metrics_serialization() {
+        let variant_counts = [("a", 36), ("b", 16), ("c", 42)];
+
+        let variant_metrics = DashMap::new();
+        for (variant, count) in variant_counts {
+            variant_metrics.insert(variant.into(), AtomicU64::new(count));
+        }
+
+        let yes_count = 85;
+        let no_count = 364;
+
+        let feature = CachedFeature {
+            strategies: vec![],
+            disabled: AtomicU64::new(no_count),
+            enabled: AtomicU64::new(yes_count),
+            variant_metrics,
+            known: true,
+            feature_disabled: true,
+            variants: vec![],
+        };
+
+        let metrics: ToggleMetrics = feature.into();
+        let converted_metrics = metrics.variants.as_ref().unwrap();
+
+        assert_eq!(metrics.yes, yes_count);
+        assert_eq!(metrics.no, no_count);
+
+        for (variant, count) in variant_counts {
+            assert_eq!(*converted_metrics.get(variant).unwrap(), count);
+        }
     }
 }
