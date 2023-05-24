@@ -134,7 +134,6 @@ pub struct ToggleMetrics {
 pub struct MetricsBucket {
     pub start: chrono::DateTime<chrono::Utc>,
     pub stop: chrono::DateTime<chrono::Utc>,
-    /// name: "yes"|"no": count
     pub toggles: HashMap<String, ToggleMetrics>,
 }
 
