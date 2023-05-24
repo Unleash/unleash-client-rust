@@ -1497,7 +1497,7 @@ mod tests {
     }
 
     #[test]
-    fn metrics_serialization() {
+    fn cached_feature_into_toggle_metrics() {
         let variant_counts = [("a", 36), ("b", 16), ("c", 42)];
 
         let variant_metrics = DashMap::new();
