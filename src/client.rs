@@ -871,7 +871,6 @@ mod tests {
     use std::hash::BuildHasher;
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    use dashmap::DashMap;
     use enum_map::Enum;
     use maplit::hashmap;
     use serde::{Deserialize, Serialize};
