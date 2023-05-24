@@ -159,8 +159,8 @@ impl CachedFeature {
     }
 }
 
-impl Into<ToggleMetrics> for &CachedFeature {
-    fn into(self) -> ToggleMetrics {
+impl From<&CachedFeature> for ToggleMetrics {
+    fn from(feature: &CachedFeature) -> Self {
         fn convert_variants_count(original: &DashMap<String, AtomicU64>) -> HashMap<String, u64> {
             let mut cloned_map = HashMap::new();
 
@@ -174,10 +174,10 @@ impl Into<ToggleMetrics> for &CachedFeature {
         }
 
         ToggleMetrics {
-            yes: self.enabled.load(Ordering::Relaxed),
-            no: self.disabled.load(Ordering::Relaxed),
-            variants: if self.variant_metrics.len() > 0 {
-                Some(convert_variants_count(&self.variant_metrics))
+            yes: feature.enabled.load(Ordering::Relaxed),
+            no: feature.disabled.load(Ordering::Relaxed),
+            variants: if !feature.variant_metrics.is_empty() {
+                Some(convert_variants_count(&feature.variant_metrics))
             } else {
                 None
             },
@@ -548,7 +548,7 @@ where
     ) -> Variant {
         if feature.variants.is_empty() {
             trace!("get_variant: feature {:?} no variants", feature_name);
-            feature.count_variant(&"disabled");
+            feature.count_variant("disabled");
             return Variant::disabled();
         }
         let group = format!("{}", feature_name);
