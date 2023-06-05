@@ -174,7 +174,7 @@ impl Clone for CachedVariant {
         Self {
             count: AtomicU64::new(self.count.load(Ordering::Relaxed)),
             name: self.name.clone(),
-            weight: self.weight.clone(),
+            weight: self.weight,
             payload: self.payload.clone(),
             overrides: self.overrides.clone(),
         }
@@ -517,12 +517,10 @@ where
         let enabled = cache.is_enabled_str(feature_name, Some(context), false, &self.cached_state);
         if !enabled {
             // Count the disabled variant on the newly created, previously missing feature.
-            self.cached_state().as_ref().map(|fresh_cache| {
-                let _ = &fresh_cache
+            if let Some(fresh_cache) = self.cached_state().as_ref() { let _ = &fresh_cache
                     .str_features
                     .get(feature_name)
-                    .map(|f| f.disabled_variant_count.fetch_add(1, Ordering::Relaxed));
-            });
+                    .map(|f| f.disabled_variant_count.fetch_add(1, Ordering::Relaxed)); }
             return Variant::disabled();
         }
         let feature = &cache.str_features.get(feature_name);
@@ -1534,7 +1532,7 @@ mod tests {
         assert_eq!(variant_count("nonexistant-feature", "disabled"), 2);
 
         // Calling is_enabled_str shouldn't increment disabled variant counts
-        c.is_enabled_str(&"bogus-feature", None, false);
+        c.is_enabled_str("bogus-feature", None, false);
         assert_eq!(variant_count("bogus-feature", "disabled"), 0);
     }
 }
