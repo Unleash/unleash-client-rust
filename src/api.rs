@@ -1,7 +1,9 @@
 // Copyright 2020 Cognite AS
 //! <https://docs.getunleash.io/api/client/features>
+use serde_qs;
 use std::collections::HashMap;
 use std::default::Default;
+use std::fmt::Display;
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -13,9 +15,53 @@ pub struct Features {
     pub features: Vec<Feature>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct TagFilter {
+    pub name: String,
+    pub value: String,
+}
+
+impl Display for TagFilter {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}:{}", self.name, self.value)
+    }
+}
+
+#[derive(Serialize, Debug, PartialEq, Clone)]
+pub struct FeaturesQuery {
+    pub project: Option<String>,
+    #[serde(rename = "namePrefix")]
+    pub name_prefix: Option<String>,
+    #[serde(rename = "tag")]
+    pub tags: Option<Vec<String>>,
+}
+
+impl FeaturesQuery {
+    pub fn new(
+        project: Option<String>,
+        name_prefix: Option<String>,
+        tags: &Option<Vec<TagFilter>>,
+    ) -> Self {
+        FeaturesQuery {
+            project,
+            name_prefix,
+            tags: tags
+                .as_ref()
+                .map(|tags| tags.iter().map(ToString::to_string).collect()),
+        }
+    }
+}
+
 impl Features {
-    pub fn endpoint(api_url: &str) -> String {
-        format!("{}/client/features", api_url)
+    pub fn endpoint(api_url: &str, query: Option<&FeaturesQuery>) -> String {
+        let url = format!("{}/client/features", api_url);
+
+        let url = match query {
+            Some(query) => format!("{}?{}", url, serde_qs::to_string(query).unwrap()),
+            None => url,
+        };
+
+        url
     }
 }
 
@@ -133,7 +179,8 @@ pub struct MetricsBucket {
 
 #[cfg(test)]
 mod tests {
-    use super::Registration;
+    use super::{Features, Registration, TagFilter};
+    use crate::api::FeaturesQuery;
 
     #[test]
     fn parse_reference_doc() -> Result<(), serde_json::Error> {
@@ -209,7 +256,7 @@ mod tests {
       ]
     }
     "#;
-        let parsed: super::Features = serde_json::from_str(data)?;
+        let parsed: Features = serde_json::from_str(data)?;
         assert_eq!(1, parsed.version);
         Ok(())
     }
@@ -223,5 +270,31 @@ mod tests {
             interval: 5000,
             ..Default::default()
         };
+    }
+
+    #[test]
+    fn test_features_endpoint() {
+        let endpoint = Features::endpoint(
+            "http://host.example.com:1234/api",
+            Some(&FeaturesQuery::new(
+                Some("myproject".into()),
+                Some("prefix".into()),
+                &Some(vec![
+                    TagFilter {
+                        name: "simple".into(),
+                        value: "taga".into(),
+                    },
+                    TagFilter {
+                        name: "simple".into(),
+                        value: "tagb".into(),
+                    },
+                ]),
+            )),
+        );
+
+        assert_eq!(
+            "http://host.example.com:1234/api/client/features?project=myproject&namePrefix=prefix&tag[0]=simple%3Ataga&tag[1]=simple%3Atagb",
+            endpoint
+        );
     }
 }
