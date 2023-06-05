@@ -432,7 +432,7 @@ where
         }
         let feature = &cache.features[feature_enum.clone()];
         let str_f = EnumToString(&feature_enum);
-        self._get_variant(feature, &str_f, context)
+        self._get_variant(feature, str_f, context)
     }
 
     /// Determine what variant (if any) of the feature the given context is
@@ -473,7 +473,7 @@ where
                 );
                 Variant::disabled()
             }
-            Some(feature) => self._get_variant(feature, &feature_name, context),
+            Some(feature) => self._get_variant(feature, feature_name, context),
         }
     }
 

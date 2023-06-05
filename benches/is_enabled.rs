@@ -242,7 +242,7 @@ fn batch(c: &mut Criterion) {
     );
     let mut group = c.benchmark_group("batch");
     group
-        .throughput(Throughput::Elements(iterations as u64))
+        .throughput(Throughput::Elements(iterations))
         .warm_up_time(Duration::from_secs(15))
         .measurement_time(Duration::from_secs(30));
     group.bench_function("single thread(enum)", |b| {
