@@ -32,8 +32,8 @@ pub struct Variant {
     pub enabled: bool,
 }
 
-impl From<&api::Variant> for Variant {
-    fn from(variant: &api::Variant) -> Self {
+impl From<&CachedVariant> for Variant {
+    fn from(variant: &CachedVariant) -> Self {
         Self {
             name: variant.name.clone(),
             payload: variant.payload.as_ref().cloned().unwrap_or_default(),
@@ -144,7 +144,40 @@ pub struct CachedFeature {
     disabled: AtomicU64,
     disabled_variant_count: AtomicU64,
     // Variants for use with get_variant
-    variants: Vec<api::Variant>,
+    variants: Vec<CachedVariant>,
+}
+
+#[derive(Default)]
+pub struct CachedVariant {
+    count: AtomicU64,
+    name: String,
+    weight: u8,
+    payload: Option<HashMap<String, String>>,
+    overrides: Option<Vec<api::VariantOverride>>,
+}
+
+impl Clone for CachedVariant {
+    fn clone(&self) -> Self {
+        Self {
+            count: AtomicU64::new(self.count.load(Ordering::Relaxed)),
+            name: self.name.clone(),
+            weight: self.weight.clone(),
+            payload: self.payload.clone(),
+            overrides: self.overrides.clone(),
+        }
+    }
+}
+
+impl From<api::Variant> for CachedVariant {
+    fn from(value: api::Variant) -> Self {
+        CachedVariant {
+            count: AtomicU64::new(0),
+            name: value.name,
+            weight: value.weight,
+            payload: value.payload,
+            overrides: value.overrides,
+        }
+    }
 }
 
 pub struct CachedState<F>
@@ -623,6 +656,7 @@ where
                         .unwrap_or_default()
                         .into_iter()
                         .filter(|v| v.weight > 0)
+                        .map(Into::into)
                         .collect();
                     CachedFeature {
                         strategies,
