@@ -142,6 +142,7 @@ pub struct CachedFeature {
     // on submission will be the next logical progression.
     enabled: AtomicU64,
     disabled: AtomicU64,
+    disabled_variant_count: AtomicU64,
     // Variants for use with get_variant
     variants: Vec<api::Variant>,
 }
@@ -352,6 +353,9 @@ where
                             CachedFeature {
                                 disabled: AtomicU64::new(feature.disabled.load(Ordering::Relaxed)),
                                 enabled: AtomicU64::new(feature.enabled.load(Ordering::Relaxed)),
+                                disabled_variant_count: AtomicU64::new(
+                                    feature.disabled_variant_count.load(Ordering::Relaxed),
+                                ),
                                 known: feature.known,
                                 feature_disabled: feature.feature_disabled,
                                 strategies: feature.strategies.clone(),
@@ -369,6 +373,7 @@ where
                         let stub_feature = CachedFeature {
                             disabled: AtomicU64::new(if default { 0 } else { 1 }),
                             enabled: AtomicU64::new(if default { 1 } else { 0 }),
+                            disabled_variant_count: AtomicU64::new(0),
                             known: false,
                             feature_disabled: false,
                             strategies: vec![],
@@ -593,6 +598,7 @@ where
                         strategies,
                         disabled: AtomicU64::new(0),
                         enabled: AtomicU64::new(0),
+                        disabled_variant_count: AtomicU64::new(0),
                         known: true,
                         feature_disabled: true,
                         variants: vec![],
@@ -622,6 +628,7 @@ where
                         strategies,
                         disabled: AtomicU64::new(0),
                         enabled: AtomicU64::new(0),
+                        disabled_variant_count: AtomicU64::new(0),
                         known: true,
                         feature_disabled: false,
                         variants,
