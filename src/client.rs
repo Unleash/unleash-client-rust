@@ -148,6 +148,7 @@ pub struct CachedFeature {
 }
 
 impl CachedFeature {
+    #[allow(dead_code)]
     fn variant_metrics(&self) -> HashMap<String, u64> {
         self.variants
             .iter()
