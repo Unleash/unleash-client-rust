@@ -149,7 +149,14 @@ pub struct CachedFeature {
 
 impl CachedFeature {
     fn variant_metrics(&self) -> HashMap<String, u64> {
-        todo!()
+        self.variants
+            .iter()
+            .map(|variant| (variant.name.clone(), variant.count.load(Ordering::Relaxed)))
+            .chain([(
+                "disabled".into(),
+                self.disabled_variant_count.load(Ordering::Relaxed),
+            )])
+            .collect()
     }
 }
 
@@ -471,10 +478,13 @@ where
             Some(cache) => cache,
         };
         let enabled = cache.is_enabled(feature_enum.clone(), Some(context), false);
+        let feature = &cache.features[feature_enum.clone()];
         if !enabled {
+            feature
+                .disabled_variant_count
+                .fetch_add(1, Ordering::Relaxed);
             return Variant::disabled();
         }
-        let feature = &cache.features[feature_enum.clone()];
         let str_f = EnumToString(&feature_enum);
         self._get_variant(feature, str_f, context)
     }
@@ -529,6 +539,9 @@ where
     ) -> Variant {
         if feature.variants.is_empty() {
             trace!("get_variant: feature {:?} no variants", feature_name);
+            feature
+                .disabled_variant_count
+                .fetch_add(1, Ordering::Relaxed);
             return Variant::disabled();
         }
         let group = format!("{}", feature_name);
@@ -552,6 +565,9 @@ where
             );
             let mut rng = rand::thread_rng();
             let picked = rng.gen_range(0..feature.variants.len());
+            feature.variants[picked]
+                .count
+                .fetch_add(1, Ordering::Relaxed);
             return (&feature.variants[picked]).into();
         }
         let identifier = identifier.unwrap();
@@ -562,12 +578,23 @@ where
                 for variant in feature.variants.iter().as_ref() {
                     counter += variant.weight as u32;
                     if counter > selected_weight {
+                        variant.count.fetch_add(1, Ordering::Relaxed);
                         return variant.into();
                     }
                 }
+
+                feature
+                    .disabled_variant_count
+                    .fetch_add(1, Ordering::Relaxed);
                 Variant::disabled()
             })
-            .unwrap_or_else(|_| Variant::disabled())
+            .unwrap_or_else(|_| {
+                feature
+                    .disabled_variant_count
+                    .fetch_add(1, Ordering::Relaxed);
+
+                Variant::disabled()
+            })
     }
 
     pub fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
@@ -1399,7 +1426,6 @@ mod tests {
         };
 
         c.get_variant(UserFeatures::disabled, &Context::default());
-        assert_eq!(disabled_variant_count(UserFeatures::disabled), 1);
         assert_eq!(disabled_variant_count(UserFeatures::disabled), 1);
 
         c.get_variant(UserFeatures::novariants, &Context::default());
