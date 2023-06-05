@@ -516,6 +516,13 @@ where
         };
         let enabled = cache.is_enabled_str(feature_name, Some(context), false, &self.cached_state);
         if !enabled {
+            // Count the disabled variant on the newly created, previously missing feature.
+            self.cached_state().as_ref().map(|fresh_cache| {
+                let _ = &fresh_cache
+                    .str_features
+                    .get(feature_name)
+                    .map(|f| f.disabled_variant_count.fetch_add(1, Ordering::Relaxed));
+            });
             return Variant::disabled();
         }
         let feature = &cache.str_features.get(feature_name);
@@ -1452,5 +1459,82 @@ mod tests {
 
         assert_eq!(variant_count(UserFeatures::two, "variantone"), 1);
         assert_eq!(variant_count(UserFeatures::two, "varianttwo"), 1);
+    }
+
+    #[test]
+    fn variant_metrics_str() {
+        let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
+            .with_module_level("isahc::agent", log::LevelFilter::Off)
+            .with_module_level("tracing::span", log::LevelFilter::Off)
+            .with_module_level("tracing::span::active", log::LevelFilter::Off)
+            .init();
+        let f = variant_features();
+        // with an enum
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum NoFeatures {}
+        let c = ClientBuilder::default()
+            .enable_string_features()
+            .into_client::<NoFeatures, HttpClient>("http://127.0.0.1:1234/", "foo", "test", None)
+            .unwrap();
+
+        c.memoize(f.features).unwrap();
+
+        let disabled_variant_count = |feature_name| -> u64 {
+            *c.cached_state()
+                .clone()
+                .expect("No cached state")
+                .str_features
+                .get(feature_name)
+                .expect("No feature named {feature_name}")
+                .variant_metrics()
+                .get("disabled")
+                .unwrap()
+        };
+
+        c.get_variant_str("disabled", &Context::default());
+        assert_eq!(disabled_variant_count("disabled"), 1);
+
+        c.get_variant_str("novariants", &Context::default());
+        assert_eq!(disabled_variant_count("novariants"), 1);
+
+        let session1: Context = Context {
+            session_id: Some("session1".into()),
+            ..Default::default()
+        };
+
+        let host1: Context = Context {
+            remote_address: Some(IPAddress("10.10.10.10".parse().unwrap())),
+            ..Default::default()
+        };
+        c.get_variant_str("two", &session1);
+        c.get_variant_str("two", &host1);
+
+        let variant_count = |feature_name, variant_name| -> u64 {
+            *c.cached_state()
+                .clone()
+                .expect("No cached state")
+                .str_features
+                .get(feature_name)
+                .expect("No feature named {feature_name}")
+                .variant_metrics()
+                .get(variant_name)
+                .unwrap()
+        };
+
+        assert_eq!(variant_count("two", "variantone"), 1);
+        assert_eq!(variant_count("two", "varianttwo"), 1);
+
+        // Metrics should also be tracked for features that don't exist
+        c.get_variant_str("nonexistant-feature", &Context::default());
+        assert_eq!(variant_count("nonexistant-feature", "disabled"), 1);
+
+        c.get_variant_str("nonexistant-feature", &Context::default());
+        assert_eq!(variant_count("nonexistant-feature", "disabled"), 2);
+
+        // Calling is_enabled_str shouldn't increment disabled variant counts
+        c.is_enabled_str(&"bogus-feature", None, false);
+        assert_eq!(variant_count("bogus-feature", "disabled"), 0);
     }
 }
