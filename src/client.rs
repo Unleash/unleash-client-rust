@@ -518,10 +518,12 @@ where
         let enabled = cache.is_enabled_str(feature_name, Some(context), false, &self.cached_state);
         if !enabled {
             // Count the disabled variant on the newly created, previously missing feature.
-            if let Some(fresh_cache) = self.cached_state().as_ref() { let _ = &fresh_cache
+            if let Some(fresh_cache) = self.cached_state().as_ref() {
+                let _ = &fresh_cache
                     .str_features
                     .get(feature_name)
-                    .map(|f| f.disabled_variant_count.fetch_add(1, Ordering::Relaxed)); }
+                    .map(|f| f.disabled_variant_count.fetch_add(1, Ordering::Relaxed));
+            }
             return Variant::disabled();
         }
         let feature = &cache.str_features.get(feature_name);
