@@ -147,6 +147,12 @@ pub struct CachedFeature {
     variants: Vec<CachedVariant>,
 }
 
+impl CachedFeature {
+    fn variant_metrics(&self) -> HashMap<String, u64> {
+        todo!()
+    }
+}
+
 #[derive(Default)]
 pub struct CachedVariant {
     count: AtomicU64,
@@ -1359,5 +1365,66 @@ mod tests {
         assert_eq!(variant2, c.get_variant_str("two", &uid1));
         assert_eq!(variant2, c.get_variant_str("two", &session1));
         assert_eq!(variant1, c.get_variant_str("two", &host1));
+    }
+
+    #[test]
+    fn variant_metrics() {
+        let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
+            .with_module_level("isahc::agent", log::LevelFilter::Off)
+            .with_module_level("tracing::span", log::LevelFilter::Off)
+            .with_module_level("tracing::span::active", log::LevelFilter::Off)
+            .init();
+        let f = variant_features();
+        // with an enum
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum UserFeatures {
+            disabled,
+            novariants,
+            one,
+            two,
+        }
+        let c = ClientBuilder::default()
+            .into_client::<UserFeatures, HttpClient>("http://127.0.0.1:1234/", "foo", "test", None)
+            .unwrap();
+
+        c.memoize(f.features).unwrap();
+
+        let disabled_variant_count = |feature_name| -> u64 {
+            *c.cached_state().clone().expect("No cached state").features[feature_name]
+                .variant_metrics()
+                .get("disabled")
+                .unwrap()
+        };
+
+        c.get_variant(UserFeatures::disabled, &Context::default());
+        assert_eq!(disabled_variant_count(UserFeatures::disabled), 1);
+        assert_eq!(disabled_variant_count(UserFeatures::disabled), 1);
+
+        c.get_variant(UserFeatures::novariants, &Context::default());
+        assert_eq!(disabled_variant_count(UserFeatures::novariants), 1);
+
+        let session1: Context = Context {
+            session_id: Some("session1".into()),
+            ..Default::default()
+        };
+
+        let host1: Context = Context {
+            remote_address: Some(IPAddress("10.10.10.10".parse().unwrap())),
+            ..Default::default()
+        };
+        c.get_variant(UserFeatures::two, &session1);
+        c.get_variant(UserFeatures::two, &host1);
+
+        let variant_count = |feature_name, variant_name| -> u64 {
+            *c.cached_state().clone().expect("No cached state").features[feature_name]
+                .variant_metrics()
+                .get(variant_name)
+                .unwrap()
+        };
+
+        assert_eq!(variant_count(UserFeatures::two, "variantone"), 1);
+        assert_eq!(variant_count(UserFeatures::two, "varianttwo"), 1);
     }
 }
