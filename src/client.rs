@@ -1535,11 +1535,11 @@ mod tests {
         assert_eq!(variant_count("two", "varianttwo"), 1);
 
         // Metrics should also be tracked for features that don't exist
-        c.get_variant_str("nonexistant-feature", &Context::default());
-        assert_eq!(variant_count("nonexistant-feature", "disabled"), 1);
+        c.get_variant_str("nonexistent-feature", &Context::default());
+        assert_eq!(variant_count("nonexistent-feature", "disabled"), 1);
 
-        c.get_variant_str("nonexistant-feature", &Context::default());
-        assert_eq!(variant_count("nonexistant-feature", "disabled"), 2);
+        c.get_variant_str("nonexistent-feature", &Context::default());
+        assert_eq!(variant_count("nonexistent-feature", "disabled"), 2);
 
         // Calling is_enabled_str shouldn't increment disabled variant counts
         c.is_enabled_str("bogus-feature", None, false);
