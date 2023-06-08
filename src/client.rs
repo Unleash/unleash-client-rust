@@ -35,8 +35,8 @@ pub struct Variant {
 impl From<&CachedVariant> for Variant {
     fn from(variant: &CachedVariant) -> Self {
         Self {
-            name: variant.name.clone(),
-            payload: variant.payload.as_ref().cloned().unwrap_or_default(),
+            name: variant.value.name.clone(),
+            payload: variant.value.payload.as_ref().cloned().unwrap_or_default(),
             enabled: true,
         }
     }
@@ -152,7 +152,12 @@ impl CachedFeature {
     fn variant_metrics(&self) -> HashMap<String, u64> {
         self.variants
             .iter()
-            .map(|variant| (variant.name.clone(), variant.count.load(Ordering::Relaxed)))
+            .map(|variant| {
+                (
+                    variant.value.name.clone(),
+                    variant.count.load(Ordering::Relaxed),
+                )
+            })
             .chain([(
                 "disabled".into(),
                 self.disabled_variant_count.load(Ordering::Relaxed),
@@ -161,35 +166,25 @@ impl CachedFeature {
     }
 }
 
-#[derive(Default)]
 pub struct CachedVariant {
     count: AtomicU64,
-    name: String,
-    weight: u8,
-    payload: Option<HashMap<String, String>>,
-    overrides: Option<Vec<api::VariantOverride>>,
+    value: api::Variant,
 }
 
 impl Clone for CachedVariant {
     fn clone(&self) -> Self {
         Self {
             count: AtomicU64::new(self.count.load(Ordering::Relaxed)),
-            name: self.name.clone(),
-            weight: self.weight,
-            payload: self.payload.clone(),
-            overrides: self.overrides.clone(),
+            value: self.value.clone(),
         }
     }
 }
 
 impl From<api::Variant> for CachedVariant {
-    fn from(value: api::Variant) -> Self {
+    fn from(variant: api::Variant) -> Self {
         CachedVariant {
+            value: variant,
             count: AtomicU64::new(0),
-            name: value.name,
-            weight: value.weight,
-            payload: value.payload,
-            overrides: value.overrides,
         }
     }
 }
@@ -586,12 +581,12 @@ where
             return (&feature.variants[picked]).into();
         }
         let identifier = identifier.unwrap();
-        let total_weight = feature.variants.iter().map(|v| v.weight as u32).sum();
+        let total_weight = feature.variants.iter().map(|v| v.value.weight as u32).sum();
         strategy::normalised_hash(&group, identifier, total_weight)
             .map(|selected_weight| {
                 let mut counter: u32 = 0;
                 for variant in feature.variants.iter().as_ref() {
-                    counter += variant.weight as u32;
+                    counter += variant.value.weight as u32;
                     if counter > selected_weight {
                         variant.count.fetch_add(1, Ordering::Relaxed);
                         return variant.into();
