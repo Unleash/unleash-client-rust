@@ -16,7 +16,7 @@ use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration};
+use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration, ToggleMetrics};
 use crate::context::Context;
 use crate::http::{HttpClient, HTTP};
 use crate::strategy;
@@ -147,8 +147,17 @@ pub struct CachedFeature {
     variants: Vec<CachedVariant>,
 }
 
+impl From<&CachedFeature> for ToggleMetrics {
+    fn from(feature: &CachedFeature) -> Self {
+        ToggleMetrics {
+            yes: feature.enabled.load(Ordering::Relaxed),
+            no: feature.disabled.load(Ordering::Relaxed),
+            variants: feature.variant_metrics(),
+        }
+    }
+}
+
 impl CachedFeature {
-    #[allow(dead_code)]
     fn variant_metrics(&self) -> HashMap<String, u64> {
         self.variants
             .iter()
@@ -737,26 +746,11 @@ where
                 bucket.toggles.insert(
                     // Is this unwrap safe? Not sure.
                     serde_plain::to_string(&key).unwrap(),
-                    [
-                        ("yes".into(), feature.enabled.load(Ordering::Relaxed)),
-                        ("no".into(), feature.disabled.load(Ordering::Relaxed)),
-                    ]
-                    .iter()
-                    .cloned()
-                    .collect(),
+                    feature.into(),
                 );
             }
             for (name, feature) in &old.str_features {
-                bucket.toggles.insert(
-                    name.clone(),
-                    [
-                        ("yes".into(), feature.enabled.load(Ordering::Relaxed)),
-                        ("no".into(), feature.disabled.load(Ordering::Relaxed)),
-                    ]
-                    .iter()
-                    .cloned()
-                    .collect(),
-                );
+                bucket.toggles.insert(name.clone(), feature.into());
             }
             let metrics = Metrics {
                 app_name: self.app_name.clone(),
@@ -901,13 +895,15 @@ mod tests {
     use std::collections::hash_set::HashSet;
     use std::default::Default;
     use std::hash::BuildHasher;
+    use std::sync::atomic::AtomicU64;
 
     use enum_map::Enum;
     use maplit::hashmap;
     use serde::{Deserialize, Serialize};
 
     use super::{ClientBuilder, Variant};
-    use crate::api::{self, Feature, Features, Strategy};
+    use crate::api::{self, Feature, Features, Strategy, ToggleMetrics};
+    use crate::client::{CachedFeature, CachedVariant};
     use crate::context::{Context, IPAddress};
     use crate::strategy;
 
@@ -1539,5 +1535,52 @@ mod tests {
         // Calling is_enabled_str shouldn't increment disabled variant counts
         c.is_enabled_str("bogus-feature", None, false);
         assert_eq!(variant_count("bogus-feature", "disabled"), 0);
+    }
+
+    #[test]
+    fn cached_feature_into_toggle_metrics() {
+        let variant_counts = [("a", 36), ("b", 16), ("c", 42)];
+
+        let variants = variant_counts
+            .iter()
+            .map(|(name, count)| CachedVariant {
+                count: AtomicU64::from(*count),
+                value: api::Variant {
+                    name: name.clone().into(),
+                    weight: 0,
+                    payload: None,
+                    overrides: None,
+                },
+            })
+            .collect();
+
+        let yes_count = 85;
+        let no_count = 364;
+        let disabled_variant_count = 56;
+
+        let feature = CachedFeature {
+            strategies: vec![],
+            disabled: AtomicU64::new(no_count),
+            enabled: AtomicU64::new(yes_count),
+            known: true,
+            feature_disabled: true,
+            variants,
+            disabled_variant_count: AtomicU64::new(disabled_variant_count),
+        };
+
+        let metrics: ToggleMetrics = (&feature).into();
+
+        assert_eq!(metrics.yes, yes_count);
+        assert_eq!(metrics.no, no_count);
+
+        let converted_metrics = metrics.variants;
+        for (variant, count) in variant_counts {
+            assert_eq!(*converted_metrics.get(variant).unwrap(), count);
+        }
+
+        assert_eq!(
+            *converted_metrics.get("disabled").unwrap(),
+            disabled_variant_count
+        )
     }
 }
