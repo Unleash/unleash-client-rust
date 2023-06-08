@@ -32,11 +32,11 @@ pub struct Variant {
     pub enabled: bool,
 }
 
-impl From<&api::Variant> for Variant {
-    fn from(variant: &api::Variant) -> Self {
+impl From<&CachedVariant> for Variant {
+    fn from(variant: &CachedVariant) -> Self {
         Self {
-            name: variant.name.clone(),
-            payload: variant.payload.as_ref().cloned().unwrap_or_default(),
+            name: variant.value.name.clone(),
+            payload: variant.value.payload.as_ref().cloned().unwrap_or_default(),
             enabled: true,
         }
     }
@@ -142,8 +142,51 @@ pub struct CachedFeature {
     // on submission will be the next logical progression.
     enabled: AtomicU64,
     disabled: AtomicU64,
+    disabled_variant_count: AtomicU64,
     // Variants for use with get_variant
-    variants: Vec<api::Variant>,
+    variants: Vec<CachedVariant>,
+}
+
+impl CachedFeature {
+    #[allow(dead_code)]
+    fn variant_metrics(&self) -> HashMap<String, u64> {
+        self.variants
+            .iter()
+            .map(|variant| {
+                (
+                    variant.value.name.clone(),
+                    variant.count.load(Ordering::Relaxed),
+                )
+            })
+            .chain([(
+                "disabled".into(),
+                self.disabled_variant_count.load(Ordering::Relaxed),
+            )])
+            .collect()
+    }
+}
+
+pub struct CachedVariant {
+    count: AtomicU64,
+    value: api::Variant,
+}
+
+impl Clone for CachedVariant {
+    fn clone(&self) -> Self {
+        Self {
+            count: AtomicU64::new(self.count.load(Ordering::Relaxed)),
+            value: self.value.clone(),
+        }
+    }
+}
+
+impl From<api::Variant> for CachedVariant {
+    fn from(variant: api::Variant) -> Self {
+        CachedVariant {
+            value: variant,
+            count: AtomicU64::new(0),
+        }
+    }
 }
 
 pub struct CachedState<F>
@@ -352,6 +395,9 @@ where
                             CachedFeature {
                                 disabled: AtomicU64::new(feature.disabled.load(Ordering::Relaxed)),
                                 enabled: AtomicU64::new(feature.enabled.load(Ordering::Relaxed)),
+                                disabled_variant_count: AtomicU64::new(
+                                    feature.disabled_variant_count.load(Ordering::Relaxed),
+                                ),
                                 known: feature.known,
                                 feature_disabled: feature.feature_disabled,
                                 strategies: feature.strategies.clone(),
@@ -369,6 +415,7 @@ where
                         let stub_feature = CachedFeature {
                             disabled: AtomicU64::new(if default { 0 } else { 1 }),
                             enabled: AtomicU64::new(if default { 1 } else { 0 }),
+                            disabled_variant_count: AtomicU64::new(0),
                             known: false,
                             feature_disabled: false,
                             strategies: vec![],
@@ -427,10 +474,13 @@ where
             Some(cache) => cache,
         };
         let enabled = cache.is_enabled(feature_enum.clone(), Some(context), false);
+        let feature = &cache.features[feature_enum.clone()];
         if !enabled {
+            feature
+                .disabled_variant_count
+                .fetch_add(1, Ordering::Relaxed);
             return Variant::disabled();
         }
-        let feature = &cache.features[feature_enum.clone()];
         let str_f = EnumToString(&feature_enum);
         self._get_variant(feature, str_f, context)
     }
@@ -461,10 +511,24 @@ where
             Some(cache) => cache,
         };
         let enabled = cache.is_enabled_str(feature_name, Some(context), false, &self.cached_state);
+        let feature = &cache.str_features.get(feature_name);
         if !enabled {
+            // Count the disabled variant on the newly created, previously missing feature.
+            match feature {
+                Some(f) => {
+                    f.disabled_variant_count.fetch_add(1, Ordering::Relaxed);
+                }
+                None => {
+                    if let Some(fresh_cache) = self.cached_state().as_ref() {
+                        let _ = &fresh_cache
+                            .str_features
+                            .get(feature_name)
+                            .map(|f| f.disabled_variant_count.fetch_add(1, Ordering::Relaxed));
+                    }
+                }
+            }
             return Variant::disabled();
         }
-        let feature = &cache.str_features.get(feature_name);
         match feature {
             None => {
                 trace!(
@@ -485,6 +549,9 @@ where
     ) -> Variant {
         if feature.variants.is_empty() {
             trace!("get_variant: feature {:?} no variants", feature_name);
+            feature
+                .disabled_variant_count
+                .fetch_add(1, Ordering::Relaxed);
             return Variant::disabled();
         }
         let group = format!("{}", feature_name);
@@ -508,22 +575,36 @@ where
             );
             let mut rng = rand::thread_rng();
             let picked = rng.gen_range(0..feature.variants.len());
+            feature.variants[picked]
+                .count
+                .fetch_add(1, Ordering::Relaxed);
             return (&feature.variants[picked]).into();
         }
         let identifier = identifier.unwrap();
-        let total_weight = feature.variants.iter().map(|v| v.weight as u32).sum();
+        let total_weight = feature.variants.iter().map(|v| v.value.weight as u32).sum();
         strategy::normalised_hash(&group, identifier, total_weight)
             .map(|selected_weight| {
                 let mut counter: u32 = 0;
                 for variant in feature.variants.iter().as_ref() {
-                    counter += variant.weight as u32;
+                    counter += variant.value.weight as u32;
                     if counter > selected_weight {
+                        variant.count.fetch_add(1, Ordering::Relaxed);
                         return variant.into();
                     }
                 }
+
+                feature
+                    .disabled_variant_count
+                    .fetch_add(1, Ordering::Relaxed);
                 Variant::disabled()
             })
-            .unwrap_or_else(|_| Variant::disabled())
+            .unwrap_or_else(|_| {
+                feature
+                    .disabled_variant_count
+                    .fetch_add(1, Ordering::Relaxed);
+
+                Variant::disabled()
+            })
     }
 
     pub fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
@@ -593,6 +674,7 @@ where
                         strategies,
                         disabled: AtomicU64::new(0),
                         enabled: AtomicU64::new(0),
+                        disabled_variant_count: AtomicU64::new(0),
                         known: true,
                         feature_disabled: true,
                         variants: vec![],
@@ -617,11 +699,13 @@ where
                         .unwrap_or_default()
                         .into_iter()
                         .filter(|v| v.weight > 0)
+                        .map(Into::into)
                         .collect();
                     CachedFeature {
                         strategies,
                         disabled: AtomicU64::new(0),
                         enabled: AtomicU64::new(0),
+                        disabled_variant_count: AtomicU64::new(0),
                         known: true,
                         feature_disabled: false,
                         variants,
@@ -1318,5 +1402,142 @@ mod tests {
         assert_eq!(variant2, c.get_variant_str("two", &uid1));
         assert_eq!(variant2, c.get_variant_str("two", &session1));
         assert_eq!(variant1, c.get_variant_str("two", &host1));
+    }
+
+    #[test]
+    fn variant_metrics() {
+        let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
+            .with_module_level("isahc::agent", log::LevelFilter::Off)
+            .with_module_level("tracing::span", log::LevelFilter::Off)
+            .with_module_level("tracing::span::active", log::LevelFilter::Off)
+            .init();
+        let f = variant_features();
+        // with an enum
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum UserFeatures {
+            disabled,
+            novariants,
+            one,
+            two,
+        }
+        let c = ClientBuilder::default()
+            .into_client::<UserFeatures, HttpClient>("http://127.0.0.1:1234/", "foo", "test", None)
+            .unwrap();
+
+        c.memoize(f.features).unwrap();
+
+        let disabled_variant_count = |feature_name| -> u64 {
+            *c.cached_state().clone().expect("No cached state").features[feature_name]
+                .variant_metrics()
+                .get("disabled")
+                .unwrap()
+        };
+
+        c.get_variant(UserFeatures::disabled, &Context::default());
+        assert_eq!(disabled_variant_count(UserFeatures::disabled), 1);
+
+        c.get_variant(UserFeatures::novariants, &Context::default());
+        assert_eq!(disabled_variant_count(UserFeatures::novariants), 1);
+
+        let session1: Context = Context {
+            session_id: Some("session1".into()),
+            ..Default::default()
+        };
+
+        let host1: Context = Context {
+            remote_address: Some(IPAddress("10.10.10.10".parse().unwrap())),
+            ..Default::default()
+        };
+        c.get_variant(UserFeatures::two, &session1);
+        c.get_variant(UserFeatures::two, &host1);
+
+        let variant_count = |feature_name, variant_name| -> u64 {
+            *c.cached_state().clone().expect("No cached state").features[feature_name]
+                .variant_metrics()
+                .get(variant_name)
+                .unwrap()
+        };
+
+        assert_eq!(variant_count(UserFeatures::two, "variantone"), 1);
+        assert_eq!(variant_count(UserFeatures::two, "varianttwo"), 1);
+    }
+
+    #[test]
+    fn variant_metrics_str() {
+        let _ = simple_logger::SimpleLogger::new()
+            .with_utc_timestamps()
+            .with_module_level("isahc::agent", log::LevelFilter::Off)
+            .with_module_level("tracing::span", log::LevelFilter::Off)
+            .with_module_level("tracing::span::active", log::LevelFilter::Off)
+            .init();
+        let f = variant_features();
+        // with an enum
+        #[allow(non_camel_case_types)]
+        #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
+        enum NoFeatures {}
+        let c = ClientBuilder::default()
+            .enable_string_features()
+            .into_client::<NoFeatures, HttpClient>("http://127.0.0.1:1234/", "foo", "test", None)
+            .unwrap();
+
+        c.memoize(f.features).unwrap();
+
+        let disabled_variant_count = |feature_name| -> u64 {
+            *c.cached_state()
+                .clone()
+                .expect("No cached state")
+                .str_features
+                .get(feature_name)
+                .expect("No feature named {feature_name}")
+                .variant_metrics()
+                .get("disabled")
+                .unwrap()
+        };
+
+        c.get_variant_str("disabled", &Context::default());
+        assert_eq!(disabled_variant_count("disabled"), 1);
+
+        c.get_variant_str("novariants", &Context::default());
+        assert_eq!(disabled_variant_count("novariants"), 1);
+
+        let session1: Context = Context {
+            session_id: Some("session1".into()),
+            ..Default::default()
+        };
+
+        let host1: Context = Context {
+            remote_address: Some(IPAddress("10.10.10.10".parse().unwrap())),
+            ..Default::default()
+        };
+        c.get_variant_str("two", &session1);
+        c.get_variant_str("two", &host1);
+
+        let variant_count = |feature_name, variant_name| -> u64 {
+            *c.cached_state()
+                .clone()
+                .expect("No cached state")
+                .str_features
+                .get(feature_name)
+                .expect("No feature named {feature_name}")
+                .variant_metrics()
+                .get(variant_name)
+                .unwrap()
+        };
+
+        assert_eq!(variant_count("two", "variantone"), 1);
+        assert_eq!(variant_count("two", "varianttwo"), 1);
+
+        // Metrics should also be tracked for features that don't exist
+        c.get_variant_str("nonexistent-feature", &Context::default());
+        assert_eq!(variant_count("nonexistent-feature", "disabled"), 1);
+
+        c.get_variant_str("nonexistent-feature", &Context::default());
+        assert_eq!(variant_count("nonexistent-feature", "disabled"), 2);
+
+        // Calling is_enabled_str shouldn't increment disabled variant counts
+        c.is_enabled_str("bogus-feature", None, false);
+        assert_eq!(variant_count("bogus-feature", "disabled"), 0);
     }
 }
