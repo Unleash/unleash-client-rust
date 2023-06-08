@@ -1546,7 +1546,7 @@ mod tests {
             .map(|(name, count)| CachedVariant {
                 count: AtomicU64::from(*count),
                 value: api::Variant {
-                    name: name.clone().into(),
+                    name: (*name).into(),
                     weight: 0,
                     payload: None,
                     overrides: None,
