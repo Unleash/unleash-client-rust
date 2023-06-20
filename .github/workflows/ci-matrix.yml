@@ -10,7 +10,6 @@ jobs:
           - stable
           - beta
           - nightly
-          - 1.59.0 # MSRV
         features:
           - surf-client
           # no need for reqwest-client-rustls, it changes only internals of reqwest
@@ -76,3 +75,29 @@ jobs:
         with:
           command: clippy
           args: --features strict,surf-client,reqwest-client,reqwest-client-rustls --all-targets -- -D warnings
+
+  msrv:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust:
+          - 1.59.0 # MSRV
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Rename and use Cargo.lock file
+        run: mv Cargo.lock.msrv Cargo.lock
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --no-default-features
