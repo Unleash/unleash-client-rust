@@ -24,7 +24,7 @@ impl Features {
 pub struct Feature {
     pub name: String,
     #[serde(default)]
-    pub description: String,
+    pub description: Option<String>,
     pub enabled: bool,
     pub strategies: Vec<Strategy>,
     pub variants: Option<Vec<Variant>>,
@@ -211,6 +211,35 @@ mod tests {
         ],
         "variants": null,
         "createdAt": "2020-03-17T01:07:25.713Z"
+      }
+      ]
+    }
+    "#;
+        let parsed: super::Features = serde_json::from_str(data)?;
+        assert_eq!(1, parsed.version);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_null_feature_doc() -> Result<(), serde_json::Error> {
+        let data = r#"
+    {
+      "version": 1,
+      "features": [
+      {
+        "name": "F1",
+        "description": null,
+        "enabled": false,
+        "strategies": [
+        {
+          "name": "default"
+        }
+        ],
+        "variants":[
+        {"name":"Foo","weight":50,"payload":{"type":"string","value":"bar"}},
+        {"name":"Bar","weight":50,"overrides":[{"contextName":"userId","values":["robert"]}]}
+        ],
+        "createdAt": "2020-04-28T07:26:27.366Z"
       }
       ]
     }

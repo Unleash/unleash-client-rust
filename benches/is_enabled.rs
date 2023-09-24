@@ -172,7 +172,7 @@ where
         // once for enums, once for strings
         let name = format!("Flexible{}", i);
         features.push(Feature {
-            description: name.clone(),
+            description: Some(name.clone()),
             enabled: true,
             created_at: None,
             variants: None,
@@ -186,7 +186,7 @@ where
         });
         let name = format!("flexible{}", i);
         features.push(Feature {
-            description: name.clone(),
+            description: Some(name.clone()),
             enabled: true,
             created_at: None,
             variants: None,

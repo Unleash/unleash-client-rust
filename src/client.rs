@@ -922,7 +922,7 @@ mod tests {
             version: 1,
             features: vec![
                 Feature {
-                    description: "default".into(),
+                    description: Some("default".to_string()),
                     enabled: true,
                     created_at: None,
                     variants: None,
@@ -933,7 +933,7 @@ mod tests {
                     }],
                 },
                 Feature {
-                    description: "userWithId".into(),
+                    description: Some("userWithId".to_string()),
                     enabled: true,
                     created_at: None,
                     variants: None,
@@ -945,7 +945,7 @@ mod tests {
                     }],
                 },
                 Feature {
-                    description: "userWithId+default".into(),
+                    description: Some("userWithId+default".to_string()),
                     enabled: true,
                     created_at: None,
                     variants: None,
@@ -963,7 +963,7 @@ mod tests {
                     ],
                 },
                 Feature {
-                    description: "disabled".into(),
+                    description: Some("disabled".to_string()),
                     enabled: false,
                     created_at: None,
                     variants: None,
@@ -974,7 +974,7 @@ mod tests {
                     }],
                 },
                 Feature {
-                    description: "nostrategies".into(),
+                    description: Some("nostrategies".to_string()),
                     enabled: true,
                     created_at: None,
                     variants: None,
@@ -1122,7 +1122,7 @@ mod tests {
             version: 1,
             features: vec![
                 Feature {
-                    description: "default".into(),
+                    description: Some("default".to_string()),
                     enabled: true,
                     created_at: None,
                     variants: None,
@@ -1133,7 +1133,7 @@ mod tests {
                     }],
                 },
                 Feature {
-                    description: "reversed".into(),
+                    description: Some("reversed".to_string()),
                     enabled: true,
                     created_at: None,
                     variants: None,
@@ -1169,7 +1169,7 @@ mod tests {
             version: 1,
             features: vec![
                 Feature {
-                    description: "disabled".into(),
+                    description: Some("disabled".to_string()),
                     enabled: false,
                     created_at: None,
                     variants: None,
@@ -1177,7 +1177,7 @@ mod tests {
                     strategies: vec![],
                 },
                 Feature {
-                    description: "novariants".into(),
+                    description: Some("novariants".to_string()),
                     enabled: true,
                     created_at: None,
                     variants: None,
@@ -1188,7 +1188,7 @@ mod tests {
                     }],
                 },
                 Feature {
-                    description: "one".into(),
+                    description: Some("one".to_string()),
                     enabled: true,
                     created_at: None,
                     variants: Some(vec![api::Variant {
@@ -1203,7 +1203,7 @@ mod tests {
                     strategies: vec![],
                 },
                 Feature {
-                    description: "two".into(),
+                    description: Some("two".to_string()),
                     enabled: true,
                     created_at: None,
                     variants: Some(vec![
@@ -1228,7 +1228,7 @@ mod tests {
                     strategies: vec![],
                 },
                 Feature {
-                    description: "nostrategies".into(),
+                    description: Some("nostrategies".to_string()),
                     enabled: true,
                     created_at: None,
                     variants: None,
