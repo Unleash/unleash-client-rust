@@ -591,12 +591,12 @@ where
         }
         let identifier = identifier.unwrap();
         let total_weight = feature.variants.iter().map(|v| v.value.weight as u32).sum();
-        strategy::normalised_hash(&group, identifier, total_weight)
+        strategy::normalised_variant_hash(&group, identifier, total_weight)
             .map(|selected_weight| {
                 let mut counter: u32 = 0;
                 for variant in feature.variants.iter().as_ref() {
                     counter += variant.value.weight as u32;
-                    if counter > selected_weight {
+                    if counter >= selected_weight {
                         variant.count.fetch_add(1, Ordering::Relaxed);
                         return variant.into();
                     }
@@ -1320,7 +1320,7 @@ mod tests {
             ],
             enabled: true,
         };
-        assert_eq!(variant2, c.get_variant(UserFeatures::two, &uid1));
+        assert_eq!(variant1, c.get_variant(UserFeatures::two, &uid1));
         assert_eq!(variant2, c.get_variant(UserFeatures::two, &session1));
         assert_eq!(variant1, c.get_variant(UserFeatures::two, &host1));
     }
@@ -1395,7 +1395,7 @@ mod tests {
             ],
             enabled: true,
         };
-        assert_eq!(variant2, c.get_variant_str("two", &uid1));
+        assert_eq!(variant1, c.get_variant_str("two", &uid1));
         assert_eq!(variant2, c.get_variant_str("two", &session1));
         assert_eq!(variant1, c.get_variant_str("two", &host1));
     }

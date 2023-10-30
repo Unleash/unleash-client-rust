@@ -38,6 +38,21 @@ mod tests {
         enabled: bool,
     }
 
+    impl PartialEq<client::Variant> for VariantResult {
+        fn eq(&self, other: &client::Variant) -> bool {
+            let payload_matches = match &self._payload {
+                Some(payload) => match (other.payload.get("type"), other.payload.get("value")) {
+                    (Some(_type), Some(value)) => {
+                        &payload._type == _type && &payload._value == value
+                    }
+                    _ => false,
+                },
+                None => other.payload.get("type").is_none() && other.payload.get("value").is_none(),
+            };
+            self.enabled == other.enabled && self._name == other.name && payload_matches
+        }
+    }
+
     #[derive(Debug, Deserialize)]
     struct VariantTest {
         description: String,
@@ -134,11 +149,11 @@ mod tests {
                 }
                 Tests::VariantTests { variant_tests } => {
                     for test in variant_tests {
-                        let result =
-                            c.is_enabled_str(&test.toggle_name, Some(&test.context), false);
+                        let result = c.get_variant_str(&test.toggle_name, &test.context);
+
                         assert_eq!(
-                            test.expected_result.enabled, result,
-                            "Test '{}' failed: got {} instead of {:?}",
+                            test.expected_result, result,
+                            "Test '{}' failed: got {:?} instead of {:?}",
                             test.description, result, test.expected_result
                         );
                     }
