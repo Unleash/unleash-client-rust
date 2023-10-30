@@ -115,6 +115,8 @@ pub fn partial_rollout(group: &str, variable: Option<&String>, rollout: u32) -> 
     }
 }
 
+const VARIANT_NORMALIZATION_SEED: u32 = 86028157;
+
 /// Calculates a hash in the standard way expected for Unleash clients. Not
 /// required for extension strategies, but reusing this is probably a good idea
 /// for consistency across implementations.
@@ -124,8 +126,30 @@ pub fn normalised_hash(group: &str, identifier: &str, modulus: u32) -> std::io::
     // benchmarking would be useful - small datasizes here could make the best
     // path non-obvious) - but until murmur3 is fixed, we need to provide it
     // with a single string no matter what.
+    normalised_hash_internal(group, identifier, modulus, 0)
+}
+
+pub fn normalised_variant_hash(
+    group: &str,
+    identifier: &str,
+    modulus: u32,
+) -> std::io::Result<u32> {
+    // See https://github.com/stusmall/murmur3/pull/16 : .chain may avoid
+    // copying in the general case, and may be faster (though perhaps
+    // benchmarking would be useful - small datasizes here could make the best
+    // path non-obvious) - but until murmur3 is fixed, we need to provide it
+    // with a single string no matter what.
+    normalised_hash_internal(group, identifier, modulus, VARIANT_NORMALIZATION_SEED)
+}
+
+fn normalised_hash_internal(
+    group: &str,
+    identifier: &str,
+    modulus: u32,
+    seed: u32,
+) -> std::io::Result<u32> {
     let mut reader = Cursor::new(format!("{}:{}", &group, &identifier));
-    murmur3_32(&mut reader, 0).map(|hash_result| hash_result % modulus)
+    murmur3_32(&mut reader, seed).map(|hash_result| hash_result % modulus)
 }
 
 // Build a closure to handle session id rollouts, parameterised by groupId and a
@@ -860,5 +884,23 @@ mod tests {
     #[test]
     fn normalised_hash() {
         assert!(50 > super::normalised_hash("AB12A", "122", 100).unwrap());
+    }
+
+    #[test]
+    fn test_normalized_hash() {
+        assert_eq!(73, super::normalised_hash("123", "gr1", 100).unwrap());
+        assert_eq!(25, super::normalised_hash("999", "groupX", 100).unwrap());
+    }
+
+    #[test]
+    fn test_normalised_variant_hash() {
+        assert_eq!(
+            96,
+            super::normalised_variant_hash("123", "gr1", 100).unwrap()
+        );
+        assert_eq!(
+            60,
+            super::normalised_variant_hash("999", "groupX", 100).unwrap()
+        );
     }
 }
