@@ -119,16 +119,15 @@ pub fn partial_rollout(group: &str, variable: Option<&String>, rollout: u32) -> 
 /// required for extension strategies, but reusing this is probably a good idea
 /// for consistency across implementations.
 pub fn normalised_hash(group: &str, identifier: &str, modulus: u32) -> std::io::Result<u32> {
-    // See https://github.com/stusmall/murmur3/pull/16 : .chain may avoid
-    // copying in the general case, and may be faster (though perhaps
-    // benchmarking would be useful - small datasizes here could make the best
-    // path non-obvious) - but until murmur3 is fixed, we need to provide it
-    // with a single string no matter what.
     normalised_hash_internal(group, identifier, modulus, 0)
 }
 
 const VARIANT_NORMALIZATION_SEED: u32 = 86028157;
 
+/// Calculates a hash for **variant distribution** in the standard way
+/// expected for Unleash clients. This differs from the
+/// [`normalised_hash`] function in that it uses a different seed to
+///  ensure a fair distribution.
 pub fn normalised_variant_hash(
     group: &str,
     identifier: &str,
@@ -143,6 +142,11 @@ fn normalised_hash_internal(
     modulus: u32,
     seed: u32,
 ) -> std::io::Result<u32> {
+    // See https://github.com/stusmall/murmur3/pull/16 : .chain may avoid
+    // copying in the general case, and may be faster (though perhaps
+    // benchmarking would be useful - small datasizes here could make the best
+    // path non-obvious) - but until murmur3 is fixed, we need to provide it
+    // with a single string no matter what.
     let mut reader = Cursor::new(format!("{}:{}", &group, &identifier));
     murmur3_32(&mut reader, seed).map(|hash_result| (hash_result % modulus) + 1)
 }
