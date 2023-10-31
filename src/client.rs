@@ -596,7 +596,7 @@ where
                 let mut counter: u32 = 0;
                 for variant in feature.variants.iter().as_ref() {
                     counter += variant.value.weight as u32;
-                    if counter > selected_weight {
+                    if counter >= selected_weight {
                         variant.count.fetch_add(1, Ordering::Relaxed);
                         return variant.into();
                     }
