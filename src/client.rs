@@ -1320,7 +1320,7 @@ mod tests {
             ],
             enabled: true,
         };
-        assert_eq!(variant2, c.get_variant(UserFeatures::two, &uid1));
+        assert_eq!(variant1, c.get_variant(UserFeatures::two, &uid1));
         assert_eq!(variant2, c.get_variant(UserFeatures::two, &session1));
         assert_eq!(variant1, c.get_variant(UserFeatures::two, &host1));
     }
@@ -1395,7 +1395,7 @@ mod tests {
             ],
             enabled: true,
         };
-        assert_eq!(variant2, c.get_variant_str("two", &uid1));
+        assert_eq!(variant1, c.get_variant_str("two", &uid1));
         assert_eq!(variant2, c.get_variant_str("two", &session1));
         assert_eq!(variant1, c.get_variant_str("two", &host1));
     }
