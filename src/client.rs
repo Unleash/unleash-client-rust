@@ -591,7 +591,7 @@ where
         }
         let identifier = identifier.unwrap();
         let total_weight = feature.variants.iter().map(|v| v.value.weight as u32).sum();
-        strategy::normalised_hash(&group, identifier, total_weight)
+        strategy::normalised_variant_hash(&group, identifier, total_weight)
             .map(|selected_weight| {
                 let mut counter: u32 = 0;
                 for variant in feature.variants.iter().as_ref() {
