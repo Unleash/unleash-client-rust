@@ -59,10 +59,10 @@ serde_json = "1.0.68"
 serde_plain = "1.0.0"
 surf = { version = "2.3.1", optional = true }
 
-[dependencies.chrono]
+[dependencies.time]
 default-features = false
-features = ["clock", "serde"]
-version = "0.4.19"
+features = ["std", "serde"]
+version = "0.3.30"
 
 [dependencies.reqwest]
 default-features = false

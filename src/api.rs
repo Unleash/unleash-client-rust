@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::default::Default;
 
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -29,7 +28,7 @@ pub struct Feature {
     pub strategies: Vec<Strategy>,
     pub variants: Option<Vec<Variant>>,
     #[serde(rename = "createdAt")]
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: Option<time::OffsetDateTime>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug)]
@@ -85,7 +84,7 @@ pub struct Registration {
     #[serde(rename = "sdkVersion")]
     pub sdk_version: String,
     pub strategies: Vec<String>,
-    pub started: chrono::DateTime<chrono::Utc>,
+    pub started: time::OffsetDateTime,
     pub interval: u64,
 }
 
@@ -102,7 +101,7 @@ impl Default for Registration {
             instance_id: "".into(),
             sdk_version: "unleash-client-rust-0.1.0".into(),
             strategies: vec![],
-            started: Utc::now(),
+            started: time::OffsetDateTime::now_utc(),
             interval: 15 * 1000,
         }
     }
@@ -132,8 +131,8 @@ pub struct ToggleMetrics {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MetricsBucket {
-    pub start: chrono::DateTime<chrono::Utc>,
-    pub stop: chrono::DateTime<chrono::Utc>,
+    pub start: time::OffsetDateTime,
+    pub stop: time::OffsetDateTime,
     pub toggles: HashMap<String, ToggleMetrics>,
 }
 
