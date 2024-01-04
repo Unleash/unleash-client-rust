@@ -63,6 +63,7 @@ pub enum ConstraintExpression {
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct Variant {
     pub name: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub weight: u16,
     pub payload: Option<HashMap<String, String>>,
     pub overrides: Option<Vec<VariantOverride>>,
@@ -135,6 +136,25 @@ pub struct MetricsBucket {
     pub start: chrono::DateTime<chrono::Utc>,
     pub stop: chrono::DateTime<chrono::Utc>,
     pub toggles: HashMap<String, ToggleMetrics>,
+}
+
+fn deserialize_number_from_string<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: std::str::FromStr + serde::Deserialize<'de>,
+    <T as std::str::FromStr>::Err: std::fmt::Display,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrInt<T> {
+        String(String),
+        Number(T),
+    }
+
+    match StringOrInt::<T>::deserialize(deserializer)? {
+        StringOrInt::String(s) => s.parse::<T>().map_err(serde::de::Error::custom),
+        StringOrInt::Number(i) => Ok(i),
+    }
 }
 
 #[cfg(test)]
@@ -246,6 +266,16 @@ mod tests {
     "#;
         let parsed: super::Features = serde_json::from_str(data)?;
         assert_eq!(1, parsed.version);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_variant_with_str_weight() -> Result<(), serde_json::Error> {
+        let data = r#"
+      {"name":"Foo","weight":"50","payload":{"type":"string","value":"bar"}}
+      "#;
+        let parsed: super::Variant = serde_json::from_str(data)?;
+        assert_eq!(50, parsed.weight);
         Ok(())
     }
 
