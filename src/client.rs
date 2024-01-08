@@ -749,9 +749,6 @@ where
                     feature.into(),
                 );
             }
-            for (name, feature) in &old.str_features {
-                bucket.toggles.insert(name.clone(), feature.into());
-            }
             let metrics = Metrics {
                 app_name: self.app_name.clone(),
                 instance_id: self.instance_id.clone(),
