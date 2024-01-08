@@ -749,6 +749,16 @@ where
                     feature.into(),
                 );
             }
+            // Only create metrics for used str_features.
+            if self.enable_str_features {
+                for (name, feature) in &old.str_features {
+                    if feature.enabled.load(Ordering::Relaxed) != 0
+                        || feature.disabled.load(Ordering::Relaxed) != 0
+                    {
+                        bucket.toggles.insert(name.clone(), feature.into());
+                    }
+                }
+            }
             let metrics = Metrics {
                 app_name: self.app_name.clone(),
                 instance_id: self.instance_id.clone(),
