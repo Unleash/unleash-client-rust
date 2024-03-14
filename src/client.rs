@@ -268,7 +268,7 @@ where
         let default_context = &Default::default();
         let context = context.unwrap_or(default_context);
 
-        match (|| {
+        let feature_enabled = {
             if feature.strategies.is_empty() && feature.known && !feature.feature_disabled {
                 trace!(
                     "is_enabled: feature {:?} has no strategies: enabling",
@@ -307,15 +307,14 @@ where
                 );
                 false
             }
-        })() {
-            true => {
-                feature.enabled.fetch_add(1, Ordering::Relaxed);
-                true
-            }
-            false => {
-                feature.disabled.fetch_add(1, Ordering::Relaxed);
-                false
-            }
+        };
+
+        if feature_enabled {
+            feature.enabled.fetch_add(1, Ordering::Relaxed);
+            true
+        } else {
+            feature.disabled.fetch_add(1, Ordering::Relaxed);
+            false
         }
     }
 
