@@ -15,7 +15,7 @@ pub struct Features {
 
 impl Features {
     pub fn endpoint(api_url: &str) -> String {
-        format!("{}/client/features", api_url)
+        format!("{}/client/features", api_url.trim_end_matches('/'))
     }
 }
 
@@ -92,7 +92,7 @@ pub struct Registration {
 
 impl Registration {
     pub fn endpoint(api_url: &str) -> String {
-        format!("{}/client/register", api_url)
+        format!("{}/client/register", api_url.trim_end_matches('/'))
     }
 }
 
@@ -120,7 +120,7 @@ pub struct Metrics {
 
 impl Metrics {
     pub fn endpoint(api_url: &str) -> String {
-        format!("{}/client/metrics", api_url)
+        format!("{}/client/metrics", api_url.trim_end_matches('/'))
     }
 }
 
@@ -159,7 +159,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::Registration;
+
+    use super::{Features, Metrics, Registration};
 
     #[test]
     fn parse_reference_doc() -> Result<(), serde_json::Error> {
@@ -288,5 +289,35 @@ mod tests {
             interval: 5000,
             ..Default::default()
         };
+    }
+
+    #[test]
+    fn test_endpoints_handle_trailing_slashes() {
+        assert_eq!(
+            Registration::endpoint("https://localhost:4242/api"),
+            "https://localhost:4242/api/client/register"
+        );
+        assert_eq!(
+            Registration::endpoint("https://localhost:4242/api/"),
+            "https://localhost:4242/api/client/register"
+        );
+
+        assert_eq!(
+            Features::endpoint("https://localhost:4242/api"),
+            "https://localhost:4242/api/client/features"
+        );
+        assert_eq!(
+            Features::endpoint("https://localhost:4242/api/"),
+            "https://localhost:4242/api/client/features"
+        );
+
+        assert_eq!(
+            Metrics::endpoint("https://localhost:4242/api"),
+            "https://localhost:4242/api/client/metrics"
+        );
+        assert_eq!(
+            Metrics::endpoint("https://localhost:4242/api/"),
+            "https://localhost:4242/api/client/metrics"
+        );
     }
 }
