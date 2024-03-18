@@ -11,7 +11,7 @@ name = "unleash-api-client"
 readme = "README.md"
 repository = "https://github.com/cognitedata/unleash-client-rust/"
 rust-version = "1.59"
-version = "0.10.2"
+version = "0.10.3"
 
 [badges]
 [badges.maintenance]
@@ -29,7 +29,7 @@ reqwest-client-rustls = ["reqwest", "reqwest/rustls-tls"]
 # To error if an unsupported API feature is present
 strict = []
 # For use with --no-default-features
-surf-client = ["surf", "async-std"]
+surf-client = ["async-std", "surf"]
 
 [[bench]]
 harness = false
@@ -83,7 +83,7 @@ num_cpus = "1.13.0"
 simple_logger = "2.1.0"
 
 [dev-dependencies.tokio]
-features = ["rt-multi-thread", "macros", "time"]
+features = ["macros", "rt-multi-thread", "time"]
 version = "1.12.0"
 
 [lib]
