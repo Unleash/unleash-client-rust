@@ -258,17 +258,12 @@ where
     F: EnumArray<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
 {
     fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
-        trace!(
-            "is_enabled: feature {:?} default {}, context {:?}",
-            feature_enum,
-            default,
-            context
-        );
-        let feature = &self.features[feature_enum.clone()];
-        let default_context = &Default::default();
-        let context = context.unwrap_or(default_context);
-
-        let feature_enabled = {
+        fn raw_enabled<F: Debug>(
+            feature: &CachedFeature,
+            feature_enum: F,
+            context: &Context,
+            default: bool,
+        ) -> bool {
             if feature.strategies.is_empty() && feature.known && !feature.feature_disabled {
                 trace!(
                     "is_enabled: feature {:?} has no strategies: enabling",
@@ -307,7 +302,19 @@ where
                 );
                 false
             }
-        };
+        }
+
+        trace!(
+            "is_enabled: feature {:?} default {}, context {:?}",
+            feature_enum,
+            default,
+            context
+        );
+        let feature = &self.features[feature_enum.clone()];
+        let default_context = &Default::default();
+        let context = context.unwrap_or(default_context);
+
+        let feature_enabled = raw_enabled(feature, feature_enum, context, default);
 
         if feature_enabled {
             feature.enabled.fetch_add(1, Ordering::Relaxed);
