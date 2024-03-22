@@ -8,7 +8,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use arc_swap::ArcSwapOption;
-use chrono::Utc;
 use enum_map::{EnumArray, EnumMap};
 use futures_timer::Delay;
 use log::{debug, trace, warn};
@@ -202,7 +201,7 @@ pub struct CachedState<F>
 where
     F: EnumArray<CachedFeature>,
 {
-    start: chrono::DateTime<chrono::Utc>,
+    start: time::OffsetDateTime,
     // user supplies F defining the features they need
     // The default value of F is defined as 'fallback to string lookups'.
     features: EnumMap<F, CachedFeature>,
@@ -674,7 +673,7 @@ where
         &self,
         features: Vec<Feature>,
     ) -> Result<Option<Metrics>, Box<dyn std::error::Error + Send + Sync>> {
-        let now = Utc::now();
+        let now = time::OffsetDateTime::now_utc();
         trace!("memoize: start with {} features", features.len());
         let source_strategies = self.strategies.lock().unwrap();
         let mut unenumerated_features: HashMap<String, CachedFeature> = HashMap::new();
