@@ -19,6 +19,7 @@ mod tests {
     use futures_timer::Delay;
     use serde::{Deserialize, Serialize};
 
+    use unleash_api_client::Context;
     use unleash_api_client::{client, config::EnvironmentConfig, http::HttpClient};
 
     #[cfg(not(any(feature = "surf", feature = "reqwest")))]
@@ -28,6 +29,7 @@ mod tests {
     #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
     enum UserFeatures {
         default,
+        semver
     }
 
     #[async_trait]
@@ -120,6 +122,8 @@ mod tests {
             // Ensure we have features
             Delay::new(Duration::from_millis(500)).await;
             assert!(client.is_enabled(UserFeatures::default, None, false));
+            assert!(client.is_enabled(UserFeatures::semver, Some(&Context { app_name: "1.0.0".to_string(), ..Context::default() }), false));
+            assert!(!client.is_enabled(UserFeatures::semver, Some(&Context { app_name: "1.0.1".to_string(), ..Context::default() }), false));
             // Ensure the metrics get up-loaded
             Delay::new(Duration::from_millis(500)).await;
             client.stop_poll().await;
@@ -179,7 +183,7 @@ mod tests {
         A::sleep(Duration::from_millis(500)).await;
         assert!(client.is_enabled(UserFeatures::default, None, false));
         // Ensure the metrics get up-loaded
-        A::sleep(Duration::from_millis(500));
+        let _ = A::sleep(Duration::from_millis(500));
         client.stop_poll().await;
 
         handler.await;

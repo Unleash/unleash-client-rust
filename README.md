@@ -107,4 +107,4 @@ UNLEASH_API_URL=http://127.0.0.1:4242/api \
 
 or similar. The functional test suite looks for a manually setup set of
 features. E.g. log into the Unleash UI on port 4242 and create a feature called
-`default`.
+`default` & `semver` with a `SEMVER_EQ` strategy constraint with `app_name` value of `1.0.0`.
