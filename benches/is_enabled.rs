@@ -222,6 +222,8 @@ fn batch(c: &mut Criterion) {
             use surf::Client as HttpClient;
         } else if #[cfg(feature = "reqwest")] {
             use reqwest::Client as HttpClient;
+        } else if #[cfg(feature = "reqwest-11")] {
+            use reqwest_11::Client as HttpClient;
         } else {
             compile_error!("Cannot run test suite without a client enabled");
         }
@@ -423,6 +425,8 @@ fn single_call(c: &mut Criterion) {
             use surf::Client as HttpClient;
         } else if #[cfg(feature = "reqwest")] {
             use reqwest::Client as HttpClient;
+        } else if #[cfg(feature = "reqwest-11")] {
+            use reqwest_11::Client as HttpClient;
         } else {
             compile_error!("Cannot run test suite without a client enabled");
         }

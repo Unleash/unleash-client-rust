@@ -20,11 +20,14 @@ status = "experimental"
 [features]
 # Enable backtrace feature in anyhow
 backtrace = ["anyhow/backtrace"]
-default = ["surf-client"]
+# Force clients to make a choice about which client to use
+default = []
 # Enable the functional test suite
 functional = []
 reqwest-client = ["reqwest", "reqwest/default-tls"]
+reqwest-client-11 = ["reqwest-11", "reqwest-11/default-tls"]
 # For users that don't want to depend on OpenSSL.
+reqwest-client-11-rustls = ["reqwest-11", "reqwest-11/rustls-tls"]
 reqwest-client-rustls = ["reqwest", "reqwest/rustls-tls"]
 # To error if an unsupported API feature is present
 strict = []
@@ -68,7 +71,14 @@ version = "0.4.19"
 default-features = false
 features = ["json"]
 optional = true
-version = "0.11.10"
+version = "0.12.4"
+
+[dependencies.reqwest-11]
+default-features = false
+features = ["json"]
+optional = true
+package = "reqwest"
+version = "0.11.27"
 
 [dependencies.serde]
 features = ["derive"]

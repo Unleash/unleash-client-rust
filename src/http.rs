@@ -3,6 +3,8 @@
 
 #[cfg(feature = "reqwest")]
 mod reqwest;
+#[cfg(feature = "reqwest-11")]
+mod reqwest_11;
 mod shim;
 #[cfg(feature = "surf")]
 mod surf;

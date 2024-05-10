@@ -22,7 +22,7 @@ enum UserFeatures {
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     cfg_if::cfg_if! {
-        if #[cfg(feature = "surf")] {
+        if #[cfg(feature = "surf-client")] {
             use core::future::Future;
             use surf::Client as HttpClient;
             use async_std::task;
@@ -34,8 +34,12 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
                 }
             }
             let rt = RT{};
-        } else if #[cfg(feature = "reqwest")] {
+        } else if #[cfg(feature = "reqwest-client")] {
             use reqwest::Client as HttpClient;
+            use tokio::runtime::Runtime;
+            let rt = Arc::new(Runtime::new().unwrap());
+        } else if #[cfg(feature = "reqwest-client-11")] {
+            use reqwest_11::Client as HttpClient;
             use tokio::runtime::Runtime;
             let rt = Arc::new(Runtime::new().unwrap());
         } else {

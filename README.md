@@ -10,8 +10,9 @@ surf or reqwest support is built in, or any async HTTP client can be provided by
 the user if they implement the thin trait used to abstract over the actual
 client.
 
-Examples with async-std and tokio are in the examples/ in the source
-tree.
+Examples with async-std (feature 'surf-client') and tokio (feature
+'reqwest-client') are in the examples/ in the source tree. See the API docs for
+more feature information.
 
 To use it in a sync program, run an async executor and `block_on()` the relevant
 calls. As the client specification requires sending background metrics to the
