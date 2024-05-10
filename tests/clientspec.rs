@@ -47,7 +47,7 @@ mod tests {
                     }
                     _ => false,
                 },
-                None => other.payload.get("type").is_none() && other.payload.get("value").is_none(),
+                None => !other.payload.contains_key("type") && !other.payload.contains_key("value"),
             };
             self.enabled == other.enabled && self._name == other.name && payload_matches
         }
