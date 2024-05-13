@@ -10,8 +10,8 @@ license = "Apache-2.0"
 name = "unleash-api-client"
 readme = "README.md"
 repository = "https://github.com/cognitedata/unleash-client-rust/"
-rust-version = "1.59"
-version = "0.10.3"
+rust-version = "1.60"
+version = "0.11.0"
 
 [badges]
 [badges.maintenance]
@@ -20,12 +20,16 @@ status = "experimental"
 [features]
 # Enable backtrace feature in anyhow
 backtrace = ["anyhow/backtrace"]
-default = ["surf-client"]
+# Force clients to make a choice about which client to use
+default = []
 # Enable the functional test suite
 functional = []
-reqwest-client = ["reqwest", "reqwest/default-tls"]
+# Built in HTTP clients
+reqwest-client = ["reqwest", "reqwest?/default-tls"]
+reqwest-client-11 = ["reqwest-11", "reqwest-11?/default-tls"]
 # For users that don't want to depend on OpenSSL.
-reqwest-client-rustls = ["reqwest", "reqwest/rustls-tls"]
+reqwest-client-11-rustls = ["reqwest-11", "reqwest-11?/rustls-tls"]
+reqwest-client-rustls = ["reqwest", "reqwest?/rustls-tls"]
 # To error if an unsupported API feature is present
 strict = []
 # For use with --no-default-features
@@ -39,7 +43,7 @@ name = "is_enabled"
 bench = false
 name = "dump-features"
 path = "src/bin/dump-features.rs"
-required-features = ["async-std", "surf-client"]
+required-features = ["surf-client"]
 
 [dependencies]
 anyhow = "1.0.44"
@@ -68,14 +72,20 @@ version = "0.4.19"
 default-features = false
 features = ["json"]
 optional = true
-version = "0.11.10"
+version = "0.12"
+
+[dependencies.reqwest-11]
+default-features = false
+features = ["json"]
+optional = true
+package = "reqwest"
+version = "0.11"
 
 [dependencies.serde]
 features = ["derive"]
 version = "1.0"
 
 [dev-dependencies]
-# async-std = "1.10.0"
 criterion = "0.3.5"     # Remember to update audit.toml
 futures = "0.3.17"
 maplit = "1.0.2"

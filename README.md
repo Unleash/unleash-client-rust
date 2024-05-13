@@ -10,8 +10,9 @@ surf or reqwest support is built in, or any async HTTP client can be provided by
 the user if they implement the thin trait used to abstract over the actual
 client.
 
-Examples with async-std and tokio are in the examples/ in the source
-tree.
+Examples with async-std (feature 'surf-client') and tokio (feature
+'reqwest-client') are in the examples/ in the source tree. See the API docs for
+more feature information.
 
 To use it in a sync program, run an async executor and `block_on()` the relevant
 calls. As the client specification requires sending background metrics to the
@@ -69,7 +70,7 @@ enable_string_features | N/A | By default the Rust SDK requires you to define an
 
 ## Status
 
-Core Unleash API features work, with Rust 1.59 or above. The MSRV for this project is weakly enforced: when a hard dependency raises its version, so will the minimum version tested against, but if older rust versions work for a user, that is not prevented. `time` in particular is known to enforce a 6-month compiler age, so regular increases with the minimum version tested against are expected.
+Core Unleash API features work, with Rust 1.60 or above. The MSRV for this project is weakly enforced: when a hard dependency raises its version, so will the minimum version tested against, but if older rust versions work for a user, that is not prevented. `time` in particular is known to enforce a 6-month compiler age, so regular increases with the minimum version tested against are expected.
 
 Unimplemented Unleash specified features:
 
