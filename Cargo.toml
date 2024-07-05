@@ -2,14 +2,14 @@
 authors = ["Robert Collins <robert.collins@cognite.com>"]
 categories = ["api-bindings", "web-programming"]
 default-run = "dump-features"
-description = "An https://unleash.github.io/ API client"
+description = "An API client for https://www.getunleash.io/"
 edition = "2018"
-homepage = "https://github.com/cognitedata/unleash-client-rust/"
+homepage = "https://github.com/Unleash/unleash-client-rust/"
 keywords = ["continualdeployment"]
 license = "Apache-2.0"
 name = "unleash-api-client"
 readme = "README.md"
-repository = "https://github.com/cognitedata/unleash-client-rust/"
+repository = "https://github.com/Unleash/unleash-client-rust/"
 rust-version = "1.60"
 version = "0.11.0"
 
