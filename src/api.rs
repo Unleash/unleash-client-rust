@@ -50,13 +50,29 @@ pub struct Constraint {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(tag = "operator", content = "values")]
+#[serde(tag = "operator")]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub enum ConstraintExpression {
     #[serde(rename = "IN")]
-    In(Vec<String>),
+    In(MultiValueExpression),
     #[serde(rename = "NOT_IN")]
-    NotIn(Vec<String>),
+    NotIn(MultiValueExpression),
+    #[serde(rename = "SEMVER_EQ")]
+    SemverEq(SingleValueExpression),
+    #[serde(rename = "SEMVER_GT")]
+    SemverGt(SingleValueExpression),
+    #[serde(rename = "SEMVER_LT")]
+    SemverLt(SingleValueExpression),
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct MultiValueExpression {
+    pub values: Vec<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct SingleValueExpression {
+    pub value: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
