@@ -93,8 +93,8 @@ For instance, one way:
 docker-compose up -d
 ```
 
-Visit <http://localhost:4242/> and log in with admin + unleash4all, then create
-a new API token at <http://localhost:4242/admin/api/create-token> for user
+Visit `http://localhost:4242/` and log in with admin + unleash4all, then create
+a new API token at `http://localhost:4242/admin/api/create-token` for user
 admin, type Client.
 
 Then run the test suite:
