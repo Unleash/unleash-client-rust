@@ -12,16 +12,23 @@ mod surf;
 pub struct HTTP<C: HttpClient> {
     authorization_header: C::HeaderName,
     app_name_header: C::HeaderName,
+    x_app_name_header: C::HeaderName,
+    x_sdk_header: C::HeaderName,
+    x_connection_id_header: C::HeaderName,
     instance_id_header: C::HeaderName,
     app_name: String,
+    sdk_version: &'static str,
     instance_id: String,
+    connection_id: String,
     authorization: Option<String>,
     client: C,
 }
 
 use serde::{de::DeserializeOwned, Serialize};
+use uuid::Uuid;
 #[doc(inline)]
 pub use shim::HttpClient;
+use crate::version::get_sdk_version;
 
 impl<C> HTTP<C>
 where
@@ -36,10 +43,15 @@ where
         Ok(HTTP {
             client: C::default(),
             app_name,
+            sdk_version: get_sdk_version(),
+            connection_id: Uuid::new_v4().into(),
             instance_id,
             authorization,
             authorization_header: C::build_header("authorization")?,
             app_name_header: C::build_header("appname")?,
+            x_app_name_header: C::build_header("x-unleash-appname")?,
+            x_sdk_header: C::build_header("x-unleash-sdk")?,
+            x_connection_id_header: C::build_header("x-unleash-connection-id")?,
             instance_id_header: C::build_header("instance_id")?,
         })
     }
@@ -73,6 +85,9 @@ where
 
     fn attach_headers(&self, request: C::RequestBuilder) -> C::RequestBuilder {
         let request = C::header(request, &self.app_name_header, self.app_name.as_str());
+        let request = C::header(request, &self.x_app_name_header, self.app_name.as_str());
+        let request = C::header(request, &self.x_sdk_header, self.sdk_version);
+        let request = C::header(request, &self.x_connection_id_header, self.connection_id.as_str());
         let request = C::header(request, &self.instance_id_header, self.instance_id.as_str());
         if let Some(auth) = &self.authorization {
             C::header(request, &self.authorization_header.clone(), auth.as_str())

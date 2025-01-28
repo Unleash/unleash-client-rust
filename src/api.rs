@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::default::Default;
 
+use crate::version::get_sdk_version;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
@@ -101,7 +102,7 @@ impl Default for Registration {
         Self {
             app_name: "".into(),
             instance_id: "".into(),
-            sdk_version: "unleash-client-rust-0.1.0".into(),
+            sdk_version: get_sdk_version().into(),
             strategies: vec![],
             started: Utc::now(),
             interval: 15 * 1000,

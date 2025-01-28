@@ -124,6 +124,7 @@ pub mod config;
 pub mod context;
 pub mod http;
 pub mod strategy;
+pub mod version;
 
 // Exports for ergonomical use
 pub use crate::client::{Client, ClientBuilder};
