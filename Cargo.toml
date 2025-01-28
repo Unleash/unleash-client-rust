@@ -62,7 +62,8 @@ rustversion = "1.0.7"
 serde_json = "1.0.68"
 serde_plain = "1.0.0"
 surf = { version = "2.3.1", optional = true }
-uuid = { version = "0.6.5", features = ["v4"] }
+uuid = { version = "1.12.1", features = ["v4"] }
+libc = { version = "0.2.156" }
 
 [dependencies.chrono]
 default-features = false
