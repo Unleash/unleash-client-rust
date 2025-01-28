@@ -44,7 +44,7 @@ where
             client: C::default(),
             app_name,
             sdk_version: get_sdk_version(),
-            connection_id: Uuid::new_v4().into(),
+            connection_id: Uuid::new_v4().to_string(),
             instance_id,
             authorization,
             authorization_header: C::build_header("authorization")?,
