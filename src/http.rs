@@ -24,11 +24,11 @@ pub struct HTTP<C: HttpClient> {
     client: C,
 }
 
+use crate::version::get_sdk_version;
 use serde::{de::DeserializeOwned, Serialize};
-use uuid::Uuid;
 #[doc(inline)]
 pub use shim::HttpClient;
-use crate::version::get_sdk_version;
+use uuid::Uuid;
 
 impl<C> HTTP<C>
 where
@@ -87,7 +87,11 @@ where
         let request = C::header(request, &self.app_name_header, self.app_name.as_str());
         let request = C::header(request, &self.x_app_name_header, self.app_name.as_str());
         let request = C::header(request, &self.x_sdk_header, self.sdk_version);
-        let request = C::header(request, &self.x_connection_id_header, self.connection_id.as_str());
+        let request = C::header(
+            request,
+            &self.x_connection_id_header,
+            self.connection_id.as_str(),
+        );
         let request = C::header(request, &self.instance_id_header, self.instance_id.as_str());
         if let Some(auth) = &self.authorization {
             C::header(request, &self.authorization_header.clone(), auth.as_str())
