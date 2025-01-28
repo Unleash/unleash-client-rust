@@ -92,7 +92,7 @@ futures = "0.3.17"
 maplit = "1.0.2"
 num_cpus = "1.13.0"
 simple_logger = "2.1.0"
-regex = "1.11.1"
+regex = "1.9.6"
 
 [dev-dependencies.tokio]
 features = ["macros", "rt-multi-thread", "time"]
