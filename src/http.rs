@@ -87,11 +87,7 @@ where
         let request = C::header(request, &self.app_name_header, self.app_name.as_str());
         let request = C::header(request, &self.unleash_app_name_header, self.app_name.as_str());
         let request = C::header(request, &self.unleash_sdk_header, self.sdk_version);
-        let request = C::header(
-            request,
-            &self.unleash_connection_id_header,
-            self.connection_id.as_str(),
-        );
+        let request = C::header(request, &self.unleash_connection_id_header, self.connection_id.as_str());
         let request = C::header(request, &self.instance_id_header, self.instance_id.as_str());
         if let Some(auth) = &self.authorization {
             C::header(request, &self.authorization_header.clone(), auth.as_str())
