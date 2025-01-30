@@ -1,7 +1,7 @@
 use std::env;
 
 // include version into the binary at compile time
-pub fn get_sdk_version() -> &'static str {
+pub(crate) fn get_sdk_version() -> &'static str {
     concat!("unleash-client-rust:", env!("CARGO_PKG_VERSION"))
 }
 
