@@ -100,3 +100,108 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use regex::Regex;
+    use std::collections::HashMap;
+
+    #[derive(Clone)]
+    struct MockHttpClient {
+        headers: std::collections::HashMap<String, String>,
+    }
+
+    #[async_trait]
+    impl HttpClient for MockHttpClient {
+        type Error = std::io::Error;
+        type HeaderName = String;
+        type RequestBuilder = Self;
+
+        fn build_header(name: &'static str) -> Result<Self::HeaderName, Self::Error> {
+            Ok(name.to_string())
+        }
+
+        fn header(builder: Self, key: &Self::HeaderName, value: &str) -> Self::RequestBuilder {
+            let mut new_builder = builder;
+            new_builder.headers.insert(key.clone(), value.to_string());
+            new_builder
+        }
+
+        fn get(&self, _uri: &str) -> Self::RequestBuilder {
+            self.clone()
+        }
+
+        fn post(&self, _uri: &str) -> Self::RequestBuilder {
+            self.clone()
+        }
+
+        async fn get_json<T: DeserializeOwned>(
+            _req: Self::RequestBuilder,
+        ) -> Result<T, Self::Error> {
+            unimplemented!()
+        }
+
+        async fn post_json<T: Serialize + Sync>(
+            _req: Self::RequestBuilder,
+            _content: &T,
+        ) -> Result<bool, Self::Error> {
+            unimplemented!()
+        }
+    }
+
+    impl Default for MockHttpClient {
+        fn default() -> Self {
+            Self {
+                headers: HashMap::new(),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_specific_headers() {
+        let http_client = HTTP::<MockHttpClient>::new(
+            "my_app".to_string(),
+            "my_instance_id".to_string(),
+            Some("auth_token".to_string()),
+        )
+        .unwrap();
+
+        let request_builder = http_client.client.post("http://example.com");
+        let request_with_headers = http_client.attach_headers(request_builder);
+
+        assert_eq!(
+            request_with_headers
+                .headers
+                .get("x-unleash-appname")
+                .unwrap(),
+            "my_app"
+        );
+        assert_eq!(
+            request_with_headers.headers.get("instance_id").unwrap(),
+            "my_instance_id"
+        );
+        assert_eq!(
+            request_with_headers.headers.get("authorization").unwrap(),
+            "auth_token"
+        );
+
+        let version_regex = Regex::new(r"^unleash-client-rust:\d+\.\d+\.\d+$").unwrap();
+        let sdk_version = request_with_headers.headers.get("x-unleash-sdk").unwrap();
+        assert!(
+            version_regex.is_match(sdk_version),
+            "Version output did not match expected format: {}",
+            sdk_version
+        );
+
+        let connection_id = request_with_headers
+            .headers
+            .get("x-unleash-connection-id")
+            .unwrap();
+        assert!(
+            Uuid::parse_str(connection_id).is_ok(),
+            "Connection ID is not a valid UUID"
+        );
+    }
+}
