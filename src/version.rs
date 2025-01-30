@@ -1,6 +1,15 @@
+//! Managing SDK versions
+//!
+//! This module includes utilities to handle versioning aspects used internally
+//! by the crate.
 use std::env;
 
-// include version into the binary at compile time
+/// Returns the version of the `unleash-client-rust` SDK compiled into the binary.
+///
+/// The version number is included at compile time using the cargo package version
+/// and is formatted as "unleash-client-rust:X.Y.Z", where X.Y.Z is the semantic
+/// versioning format. This ensures a consistent versioning approach that aligns
+/// with other Unleash SDKs.
 pub(crate) fn get_sdk_version() -> &'static str {
     concat!("unleash-client-rust:", env!("CARGO_PKG_VERSION"))
 }
