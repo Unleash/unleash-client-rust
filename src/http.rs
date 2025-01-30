@@ -12,9 +12,9 @@ mod surf;
 pub struct HTTP<C: HttpClient> {
     authorization_header: C::HeaderName,
     app_name_header: C::HeaderName,
-    x_app_name_header: C::HeaderName,
-    x_sdk_header: C::HeaderName,
-    x_connection_id_header: C::HeaderName,
+    unleash_app_name_header: C::HeaderName,
+    unleash_sdk_header: C::HeaderName,
+    unleash_connection_id_header: C::HeaderName,
     instance_id_header: C::HeaderName,
     app_name: String,
     sdk_version: &'static str,
@@ -49,9 +49,9 @@ where
             authorization,
             authorization_header: C::build_header("authorization")?,
             app_name_header: C::build_header("appname")?,
-            x_app_name_header: C::build_header("unleash-appname")?,
-            x_sdk_header: C::build_header("unleash-sdk")?,
-            x_connection_id_header: C::build_header("unleash-connection-id")?,
+            unleash_app_name_header: C::build_header("unleash-appname")?,
+            unleash_sdk_header: C::build_header("unleash-sdk")?,
+            unleash_connection_id_header: C::build_header("unleash-connection-id")?,
             instance_id_header: C::build_header("instance_id")?,
         })
     }
@@ -85,11 +85,11 @@ where
 
     fn attach_headers(&self, request: C::RequestBuilder) -> C::RequestBuilder {
         let request = C::header(request, &self.app_name_header, self.app_name.as_str());
-        let request = C::header(request, &self.x_app_name_header, self.app_name.as_str());
-        let request = C::header(request, &self.x_sdk_header, self.sdk_version);
+        let request = C::header(request, &self.unleash_app_name_header, self.app_name.as_str());
+        let request = C::header(request, &self.unleash_sdk_header, self.sdk_version);
         let request = C::header(
             request,
-            &self.x_connection_id_header,
+            &self.unleash_connection_id_header,
             self.connection_id.as_str(),
         );
         let request = C::header(request, &self.instance_id_header, self.instance_id.as_str());
