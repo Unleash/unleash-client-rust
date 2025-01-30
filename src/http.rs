@@ -106,9 +106,8 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use regex::Regex;
-    use std::collections::HashMap;
 
-    #[derive(Clone)]
+    #[derive(Clone, Default)]
     struct MockHttpClient {
         headers: std::collections::HashMap<String, String>,
     }
@@ -123,10 +122,9 @@ mod tests {
             Ok(name.to_string())
         }
 
-        fn header(builder: Self, key: &Self::HeaderName, value: &str) -> Self::RequestBuilder {
-            let mut new_builder = builder;
-            new_builder.headers.insert(key.clone(), value.to_string());
-            new_builder
+        fn header(mut builder: Self, key: &Self::HeaderName, value: &str) -> Self::RequestBuilder {
+            builder.headers.insert(key.clone(), value.to_string());
+            builder
         }
 
         fn get(&self, _uri: &str) -> Self::RequestBuilder {
@@ -148,14 +146,6 @@ mod tests {
             _content: &T,
         ) -> Result<bool, Self::Error> {
             unimplemented!()
-        }
-    }
-
-    impl Default for MockHttpClient {
-        fn default() -> Self {
-            Self {
-                headers: HashMap::new(),
-            }
         }
     }
 
