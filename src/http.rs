@@ -49,9 +49,9 @@ where
             authorization,
             authorization_header: C::build_header("authorization")?,
             app_name_header: C::build_header("appname")?,
-            x_app_name_header: C::build_header("x-unleash-appname")?,
-            x_sdk_header: C::build_header("x-unleash-sdk")?,
-            x_connection_id_header: C::build_header("x-unleash-connection-id")?,
+            x_app_name_header: C::build_header("unleash-appname")?,
+            x_sdk_header: C::build_header("unleash-sdk")?,
+            x_connection_id_header: C::build_header("unleash-connection-id")?,
             instance_id_header: C::build_header("instance_id")?,
         })
     }
@@ -162,10 +162,7 @@ mod tests {
         let request_with_headers = http_client.attach_headers(request_builder);
 
         assert_eq!(
-            request_with_headers
-                .headers
-                .get("x-unleash-appname")
-                .unwrap(),
+            request_with_headers.headers.get("unleash-appname").unwrap(),
             "my_app"
         );
         assert_eq!(
@@ -178,7 +175,7 @@ mod tests {
         );
 
         let version_regex = Regex::new(r"^unleash-client-rust:\d+\.\d+\.\d+$").unwrap();
-        let sdk_version = request_with_headers.headers.get("x-unleash-sdk").unwrap();
+        let sdk_version = request_with_headers.headers.get("unleash-sdk").unwrap();
         assert!(
             version_regex.is_match(sdk_version),
             "Version output did not match expected format: {}",
@@ -187,7 +184,7 @@ mod tests {
 
         let connection_id = request_with_headers
             .headers
-            .get("x-unleash-connection-id")
+            .get("unleash-connection-id")
             .unwrap();
         assert!(
             Uuid::parse_str(connection_id).is_ok(),
