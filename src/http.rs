@@ -19,6 +19,10 @@ pub struct HTTP<C: HttpClient> {
     app_name: String,
     sdk_version: &'static str,
     instance_id: String,
+    // The connection_id represents a logical connection from the SDK to Unleash.
+    // It's assigned internally by the SDK and lives as long as the Unleash client instance.
+    // We can't reuse instance_id since some SDKs allow to override it while
+    // connection_id has to be uniquely defined by the SDK.
     connection_id: String,
     authorization: Option<String>,
     client: C,
