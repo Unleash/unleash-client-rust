@@ -62,6 +62,7 @@ rustversion = "1.0.7"
 serde_json = "1.0.68"
 serde_plain = "1.0.0"
 surf = { version = "2.3.1", optional = true }
+uuid = { version = "1.11.0", features = ["v4"] }
 
 [dependencies.chrono]
 default-features = false
@@ -91,6 +92,7 @@ futures = "0.3.17"
 maplit = "1.0.2"
 num_cpus = "1.13.0"
 simple_logger = "2.1.0"
+regex = "1.9.6"
 
 [dev-dependencies.tokio]
 features = ["macros", "rt-multi-thread", "time"]
