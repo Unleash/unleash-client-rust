@@ -11,7 +11,7 @@ name = "unleash-api-client"
 readme = "README.md"
 repository = "https://github.com/Unleash/unleash-client-rust/"
 rust-version = "1.60"
-version = "0.11.0"
+version = "0.12.0"
 
 [badges]
 [badges.maintenance]
