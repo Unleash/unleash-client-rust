@@ -67,7 +67,6 @@ impl ClientBuilder {
         api_url: &str,
         app_name: &str,
         instance_id: &str,
-        connection_id: &str,
         authorization: Option<String>,
     ) -> Result<Client<F, C>, C::Error>
     where
