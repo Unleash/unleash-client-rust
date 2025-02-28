@@ -84,6 +84,8 @@ pub struct Registration {
     pub app_name: String,
     #[serde(rename = "instanceId")]
     pub instance_id: String,
+    #[serde(rename = "connectionId")]
+    pub connection_id: String,
     #[serde(rename = "sdkVersion")]
     pub sdk_version: String,
     pub strategies: Vec<String>,
@@ -102,6 +104,7 @@ impl Default for Registration {
         Self {
             app_name: "".into(),
             instance_id: "".into(),
+            connection_id: "".into(),
             sdk_version: get_sdk_version().into(),
             strategies: vec![],
             started: Utc::now(),
@@ -116,6 +119,8 @@ pub struct Metrics {
     pub app_name: String,
     #[serde(rename = "instanceId")]
     pub instance_id: String,
+    #[serde(rename = "connectionId")]
+    pub connection_id: String,
     pub bucket: MetricsBucket,
 }
 
@@ -286,6 +291,7 @@ mod tests {
         Registration {
             app_name: "test-suite".into(),
             instance_id: "test".into(),
+            connection_id: "test".into(),
             strategies: vec!["default".into()],
             interval: 5000,
             ..Default::default()
