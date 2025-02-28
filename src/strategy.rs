@@ -10,8 +10,9 @@ use ipnet::IpNet;
 use log::{trace, warn};
 use murmur3::murmur3_32;
 use rand::Rng;
+use semver::{Version, VersionReq};
 
-use crate::api::{Constraint, ConstraintExpression};
+use crate::api::{Constraint, ConstraintExpression, MultiValueExpression, SingleValueExpression};
 use crate::context::Context;
 
 /// Memoise feature state for a strategy.
@@ -319,13 +320,13 @@ where
     F: Fn(&Context) -> Option<&String> + Clone + Sync + Send + 'static,
 {
     match &expression {
-        ConstraintExpression::In(values) => {
+        ConstraintExpression::In(MultiValueExpression { values, .. }) => {
             let as_set: HashSet<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
                 getter(context).map(|v| as_set.contains(v)).unwrap_or(false)
             })
         }
-        ConstraintExpression::NotIn(values) => {
+        ConstraintExpression::NotIn(MultiValueExpression { values, .. }) => {
             if values.is_empty() {
                 Box::new(|_| true)
             } else {
@@ -337,6 +338,39 @@ where
                 })
             }
         }
+        ConstraintExpression::SemverEq(SingleValueExpression { value, .. }) => {
+            evaluate_semver_expression(getter, &format!("={value}"))
+        }
+        ConstraintExpression::SemverGt(SingleValueExpression { value, .. }) => {
+            evaluate_semver_expression(getter, &format!(">{value}"))
+        }
+        ConstraintExpression::SemverLt(SingleValueExpression { value, .. }) => {
+            evaluate_semver_expression(getter, &format!("<{value}"))
+        }
+    }
+}
+
+fn evaluate_semver_expression<F>(
+    getter: F,
+    version_req: &str,
+) -> Box<dyn Evaluator + Send + Sync + 'static>
+where
+    F: Fn(&Context) -> Option<&String> + Clone + Sync + Send + 'static,
+{
+    let parsed_request = VersionReq::parse(version_req);
+    match parsed_request {
+        Ok(req) => Box::new(move |context: &Context| {
+            getter(context)
+                .map(|v: &String| {
+                    let parsed = Version::parse(v);
+                    match parsed {
+                        Ok(version) => req.matches(&version),
+                        _ => false,
+                    }
+                })
+                .unwrap_or(false)
+        }),
+        _ => Box::new(|_| false),
     }
 }
 
@@ -359,7 +393,7 @@ where
     F: Fn(&Context) -> Option<&crate::context::IPAddress> + Clone + Sync + Send + 'static,
 {
     match &expression {
-        ConstraintExpression::In(values) => {
+        ConstraintExpression::In(MultiValueExpression { values, .. }) => {
             let ips = _ip_to_vec(values);
             Box::new(move |context: &Context| {
                 getter(context)
@@ -374,7 +408,7 @@ where
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::NotIn(values) => {
+        ConstraintExpression::NotIn(MultiValueExpression { values }) => {
             if values.is_empty() {
                 Box::new(|_| false)
             } else {
@@ -396,6 +430,7 @@ where
                 })
             }
         }
+        _ => Box::new(|_| false),
     }
 }
 
@@ -475,7 +510,7 @@ mod tests {
 
     use maplit::hashmap;
 
-    use crate::api::{Constraint, ConstraintExpression};
+    use crate::api::{Constraint, ConstraintExpression, MultiValueExpression};
     use crate::context::{Context, IPAddress};
 
     fn parse_ip(addr: &str) -> Option<IPAddress> {
@@ -502,7 +537,7 @@ mod tests {
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "".into(),
-                expression: ConstraintExpression::In(vec![]),
+                expression: ConstraintExpression::In(MultiValueExpression { values: vec![] }),
             }]),
             &super::default,
             None
@@ -516,7 +551,9 @@ mod tests {
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::In(vec!["development".into()]),
+                expression: ConstraintExpression::In(MultiValueExpression {
+                    values: vec!["development".into()]
+                }),
             }]),
             &super::default,
             None
@@ -530,7 +567,9 @@ mod tests {
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::NotIn(vec!["development".into()]),
+                expression: ConstraintExpression::NotIn(MultiValueExpression {
+                    values: vec!["development".into()]
+                }),
             }]),
             &super::default,
             None
@@ -544,7 +583,9 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::In(vec!["development".into()]),
+                expression: ConstraintExpression::In(MultiValueExpression {
+                    values: vec!["development".into()]
+                }),
             }]),
             &super::default,
             None
@@ -557,7 +598,9 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::In(vec!["staging".into(), "development".into()]),
+                expression: ConstraintExpression::In(MultiValueExpression {
+                    values: vec!["staging".into(), "development".into()]
+                }),
             }]),
             &super::default,
             None
@@ -571,10 +614,9 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::NotIn(vec![
-                    "staging".into(),
-                    "development".into()
-                ]),
+                expression: ConstraintExpression::NotIn(MultiValueExpression {
+                    values: vec!["staging".into(), "development".into()]
+                }),
             }]),
             &super::default,
             None
@@ -590,7 +632,9 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "userId".into(),
-                expression: ConstraintExpression::In(vec!["fred".into()]),
+                expression: ConstraintExpression::In(MultiValueExpression {
+                    values: vec!["fred".into()]
+                }),
             }]),
             &super::default,
             None
@@ -604,7 +648,9 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "sessionId".into(),
-                expression: ConstraintExpression::In(vec!["qwerty".into()]),
+                expression: ConstraintExpression::In(MultiValueExpression {
+                    values: vec!["qwerty".into()]
+                }),
             }]),
             &super::default,
             None
@@ -618,7 +664,9 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "remoteAddress".into(),
-                expression: ConstraintExpression::In(vec!["10.0.0.0/8".into()]),
+                expression: ConstraintExpression::In(MultiValueExpression {
+                    values: vec!["10.0.0.0/8".into()]
+                }),
             }]),
             &super::default,
             None
@@ -630,7 +678,9 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "remoteAddress".into(),
-                expression: ConstraintExpression::NotIn(vec!["10.0.0.0/8".into()]),
+                expression: ConstraintExpression::NotIn(MultiValueExpression {
+                    values: vec!["10.0.0.0/8".into()]
+                }),
             }]),
             &super::default,
             None
@@ -646,11 +696,15 @@ mod tests {
             Some(vec![
                 Constraint {
                     context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec!["development".into()]),
+                    expression: ConstraintExpression::In(MultiValueExpression {
+                        values: vec!["development".into()]
+                    }),
                 },
                 Constraint {
                     context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec!["development".into()]),
+                    expression: ConstraintExpression::In(MultiValueExpression {
+                        values: vec!["development".into()]
+                    }),
                 },
             ]),
             &super::default,
@@ -660,13 +714,115 @@ mod tests {
             Some(vec![
                 Constraint {
                     context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec!["development".into()]),
+                    expression: ConstraintExpression::In(MultiValueExpression {
+                        values: vec!["development".into()]
+                    }),
                 },
                 Constraint {
                     context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec![]),
+                    expression: ConstraintExpression::In(MultiValueExpression { values: vec![] }),
                 }
             ]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_semver_constrain() {
+        let context = Context {
+            properties: hashmap! {
+                "version".to_string() => "1.1.1".to_string()
+            },
+            ..Default::default()
+        };
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverEq(crate::api::SingleValueExpression {
+                    value: "1.1.1".to_string()
+                }),
+            }]),
+            &super::default,
+            None
+        )(&context));
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverEq(crate::api::SingleValueExpression {
+                    value: "1.0.1".to_string()
+                }),
+            }]),
+            &super::default,
+            None
+        )(&context));
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverGt(crate::api::SingleValueExpression {
+                    value: "1.0.0".to_string()
+                }),
+            }]),
+            &super::default,
+            None
+        )(&context));
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverGt(crate::api::SingleValueExpression {
+                    value: "1.1.0".to_string()
+                }),
+            }]),
+            &super::default,
+            None
+        )(&context));
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverGt(crate::api::SingleValueExpression {
+                    value: "1.1.1".to_string()
+                }),
+            }]),
+            &super::default,
+            None
+        )(&context));
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverLt(crate::api::SingleValueExpression {
+                    value: "1.1.2".to_string()
+                }),
+            }]),
+            &super::default,
+            None
+        )(&context));
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverLt(crate::api::SingleValueExpression {
+                    value: "1.2.0".to_string()
+                }),
+            }]),
+            &super::default,
+            None
+        )(&context));
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverLt(crate::api::SingleValueExpression {
+                    value: "2.0.0".to_string()
+                }),
+            }]),
+            &super::default,
+            None
+        )(&context));
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverLt(crate::api::SingleValueExpression {
+                    value: "1.0.0".to_string()
+                }),
+            }]),
             &super::default,
             None
         )(&context));
