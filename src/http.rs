@@ -180,7 +180,10 @@ mod tests {
             "my_instance_id"
         );
         assert_eq!(
-            request_with_headers.headers.get("unleash-connection-id").unwrap(),
+            request_with_headers
+                .headers
+                .get("unleash-connection-id")
+                .unwrap(),
             "d512f8ec-d972-40a5-9a30-a0a6e85d93ac"
         );
         assert_eq!(
