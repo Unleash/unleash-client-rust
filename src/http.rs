@@ -163,7 +163,7 @@ mod tests {
         let http_client = HTTP::<MockHttpClient>::new(
             "my_app".to_string(),
             "my_instance_id".to_string(),
-            "my_connection_id".to_string(),
+            "d512f8ec-d972-40a5-9a30-a0a6e85d93ac".to_string(),
             Some("auth_token".to_string()),
         )
         .unwrap();
@@ -178,6 +178,10 @@ mod tests {
         assert_eq!(
             request_with_headers.headers.get("instance_id").unwrap(),
             "my_instance_id"
+        );
+        assert_eq!(
+            request_with_headers.headers.get("unleash-connection-id").unwrap(),
+            "d512f8ec-d972-40a5-9a30-a0a6e85d93ac"
         );
         assert_eq!(
             request_with_headers.headers.get("authorization").unwrap(),
