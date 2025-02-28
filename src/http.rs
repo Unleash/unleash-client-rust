@@ -32,7 +32,6 @@ use crate::version::get_sdk_version;
 use serde::{de::DeserializeOwned, Serialize};
 #[doc(inline)]
 pub use shim::HttpClient;
-use uuid::Uuid;
 
 impl<C> HTTP<C>
 where
@@ -42,13 +41,14 @@ where
     pub fn new(
         app_name: String,
         instance_id: String,
+        connection_id: String,
         authorization: Option<String>,
     ) -> Result<Self, C::Error> {
         Ok(HTTP {
             client: C::default(),
             app_name,
             sdk_version: get_sdk_version(),
-            connection_id: Uuid::new_v4().to_string(),
+            connection_id,
             instance_id,
             authorization,
             authorization_header: C::build_header("authorization")?,

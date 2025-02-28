@@ -15,6 +15,7 @@ use log::{debug, trace, warn};
 use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use uuid::Uuid;
 
 use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration, ToggleMetrics};
 use crate::context::Context;
@@ -66,6 +67,7 @@ impl ClientBuilder {
         api_url: &str,
         app_name: &str,
         instance_id: &str,
+        connection_id: &str,
         authorization: Option<String>,
     ) -> Result<Client<F, C>, C::Error>
     where
@@ -78,9 +80,15 @@ impl ClientBuilder {
             disable_metric_submission: self.disable_metric_submission,
             enable_str_features: self.enable_str_features,
             instance_id: instance_id.into(),
+            connection_id: Uuid::new_v4().to_string(),
             interval: self.interval,
             polling: AtomicBool::new(false),
-            http: HTTP::new(app_name.into(), instance_id.into(), authorization)?,
+            http: HTTP::new(
+                app_name.into(),
+                instance_id.into(),
+                connection_id.into(),
+                authorization,
+            )?,
             cached_state: ArcSwapOption::from(None),
             strategies: Mutex::new(self.strategies),
         })
@@ -229,6 +237,7 @@ where
     disable_metric_submission: bool,
     enable_str_features: bool,
     instance_id: String,
+    connection_id: String,
     interval: u64,
     polling: AtomicBool,
     // Permits making extension calls to the Unleash API not yet modelled in the Rust SDK.
@@ -768,6 +777,7 @@ where
             let metrics = Metrics {
                 app_name: self.app_name.clone(),
                 instance_id: self.instance_id.clone(),
+                connection_id: self.connection_id.clone(),
                 bucket,
             };
             Ok(Some(metrics))
@@ -833,6 +843,7 @@ where
         let registration = Registration {
             app_name: self.app_name.clone(),
             instance_id: self.instance_id.clone(),
+            connection_id: self.connection_id.clone(),
             interval: self.interval,
             strategies: self
                 .strategies
