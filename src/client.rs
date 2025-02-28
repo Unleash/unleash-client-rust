@@ -800,7 +800,7 @@ where
         self.polling.store(true, Ordering::Relaxed);
         loop {
             debug!("poll: retrieving features");
-            let res = self.http.get_json(&endpoint).await;
+            let res = self.http.get_json(&endpoint, Some(self.interval)).await;
             if let Ok(res) = res {
                 let features: Features = res;
                 match self.memoize(features.features) {
@@ -808,7 +808,10 @@ where
                     Ok(Some(metrics)) => {
                         if !self.disable_metric_submission {
                             let mut metrics_uploaded = false;
-                            let res = self.http.post_json(&metrics_endpoint, metrics).await;
+                            let res = self
+                                .http
+                                .post_json(&metrics_endpoint, metrics, Some(self.interval))
+                                .await;
                             if let Ok(successful) = res {
                                 if successful {
                                     metrics_uploaded = true;
@@ -856,7 +859,7 @@ where
         };
         let success = self
             .http
-            .post_json(&Registration::endpoint(&self.api_url), &registration)
+            .post_json(&Registration::endpoint(&self.api_url), &registration, None)
             .await
             .map_err(|err| anyhow::anyhow!(err))?;
         if !success {

@@ -67,8 +67,20 @@ where
     }
 
     /// Make a get request and parse into JSON
-    pub async fn get_json<T: DeserializeOwned>(&self, endpoint: &str) -> Result<T, C::Error> {
-        C::get_json(self.get(endpoint)).await
+    pub async fn get_json<T: DeserializeOwned>(
+        &self,
+        endpoint: &str,
+        interval: Option<u64>,
+    ) -> Result<T, C::Error> {
+        let mut request = self.get(endpoint);
+        if let Some(interval) = interval {
+            request = C::header(
+                request,
+                &C::build_header("unleash-interval")?,
+                &interval.to_string(),
+            );
+        }
+        C::get_json(request).await
     }
 
     /// Perform a POST. Returns errors per HttpClient::post.
@@ -83,8 +95,17 @@ where
         &self,
         endpoint: &str,
         content: T,
+        interval: Option<u64>,
     ) -> Result<bool, C::Error> {
-        C::post_json(self.post(endpoint), &content).await
+        let mut request = self.post(endpoint);
+        if let Some(interval) = interval {
+            request = C::header(
+                request,
+                &C::build_header("unleash-interval")?,
+                &interval.to_string(),
+            );
+        }
+        C::post_json(request, &content).await
     }
 
     fn attach_headers(&self, request: C::RequestBuilder) -> C::RequestBuilder {
@@ -114,11 +135,14 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use regex::Regex;
+    use serde_json::json;
+    use std::collections::HashMap;
+    use std::sync::{Arc, RwLock};
     use uuid::Uuid;
 
     #[derive(Clone, Default)]
     struct MockHttpClient {
-        headers: std::collections::HashMap<String, String>,
+        headers: Arc<RwLock<HashMap<String, String>>>,
     }
 
     #[async_trait]
@@ -131,8 +155,10 @@ mod tests {
             Ok(name.to_string())
         }
 
-        fn header(mut builder: Self, key: &Self::HeaderName, value: &str) -> Self::RequestBuilder {
-            builder.headers.insert(key.clone(), value.to_string());
+        fn header(builder: Self, key: &Self::HeaderName, value: &str) -> Self::RequestBuilder {
+            if let Ok(mut headers) = builder.headers.write() {
+                headers.insert(key.clone(), value.to_string());
+            }
             builder
         }
 
@@ -147,14 +173,14 @@ mod tests {
         async fn get_json<T: DeserializeOwned>(
             _req: Self::RequestBuilder,
         ) -> Result<T, Self::Error> {
-            unimplemented!()
+            Ok(serde_json::from_value(json!({})).unwrap())
         }
 
         async fn post_json<T: Serialize + Sync>(
             _req: Self::RequestBuilder,
             _content: &T,
         ) -> Result<bool, Self::Error> {
-            unimplemented!()
+            Ok(true)
         }
     }
 
@@ -168,41 +194,29 @@ mod tests {
         )
         .unwrap();
 
-        let request_builder = http_client.client.post("http://example.com");
-        let request_with_headers = http_client.attach_headers(request_builder);
+        let _ = http_client
+            .get_json::<serde_json::Value>("http://example.com", Some(15))
+            .await;
+        let headers = &http_client.client.headers.read().unwrap();
 
+        assert_eq!(headers.get("unleash-appname").unwrap(), "my_app");
+        assert_eq!(headers.get("instance_id").unwrap(), "my_instance_id");
         assert_eq!(
-            request_with_headers.headers.get("unleash-appname").unwrap(),
-            "my_app"
-        );
-        assert_eq!(
-            request_with_headers.headers.get("instance_id").unwrap(),
-            "my_instance_id"
-        );
-        assert_eq!(
-            request_with_headers
-                .headers
-                .get("unleash-connection-id")
-                .unwrap(),
+            headers.get("unleash-connection-id").unwrap(),
             "d512f8ec-d972-40a5-9a30-a0a6e85d93ac"
         );
-        assert_eq!(
-            request_with_headers.headers.get("authorization").unwrap(),
-            "auth_token"
-        );
+        assert_eq!(headers.get("unleash-interval").unwrap(), "15");
+        assert_eq!(headers.get("authorization").unwrap(), "auth_token");
 
         let version_regex = Regex::new(r"^unleash-client-rust:\d+\.\d+\.\d+$").unwrap();
-        let sdk_version = request_with_headers.headers.get("unleash-sdk").unwrap();
+        let sdk_version = headers.get("unleash-sdk").unwrap();
         assert!(
             version_regex.is_match(sdk_version),
             "Version output did not match expected format: {}",
             sdk_version
         );
 
-        let connection_id = request_with_headers
-            .headers
-            .get("unleash-connection-id")
-            .unwrap();
+        let connection_id = headers.get("unleash-connection-id").unwrap();
         assert!(
             Uuid::parse_str(connection_id).is_ok(),
             "Connection ID is not a valid UUID"
