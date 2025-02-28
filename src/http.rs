@@ -114,6 +114,7 @@ mod tests {
     use super::*;
     use async_trait::async_trait;
     use regex::Regex;
+    use uuid::Uuid;
 
     #[derive(Clone, Default)]
     struct MockHttpClient {
@@ -162,6 +163,7 @@ mod tests {
         let http_client = HTTP::<MockHttpClient>::new(
             "my_app".to_string(),
             "my_instance_id".to_string(),
+            "my_connection_id".to_string(),
             Some("auth_token".to_string()),
         )
         .unwrap();
