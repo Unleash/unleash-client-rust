@@ -73,19 +73,20 @@ impl ClientBuilder {
         F: EnumArray<CachedFeature> + Debug + DeserializeOwned + Serialize,
         C: HttpClient + Default,
     {
+        let connection_id = Uuid::new_v4().to_string();
         Ok(Client {
             api_url: api_url.into(),
             app_name: app_name.into(),
             disable_metric_submission: self.disable_metric_submission,
             enable_str_features: self.enable_str_features,
             instance_id: instance_id.into(),
-            connection_id: Uuid::new_v4().to_string(),
+            connection_id: connection_id.clone(),
             interval: self.interval,
             polling: AtomicBool::new(false),
             http: HTTP::new(
                 app_name.into(),
                 instance_id.into(),
-                connection_id.into(),
+                connection_id,
                 authorization,
             )?,
             cached_state: ArcSwapOption::from(None),
