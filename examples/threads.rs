@@ -38,6 +38,10 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
             use reqwest::Client as HttpClient;
             use tokio::runtime::Runtime;
             let rt = Arc::new(Runtime::new().unwrap());
+        } else if #[cfg(feature = "reqwest-11")] {
+            use reqwest_11::Client as HttpClient;
+            use tokio::runtime::Runtime;
+            let rt = Arc::new(Runtime::new().unwrap());
         } else {
             compile_error!("Cannot run test suite without a client enabled");
         }

@@ -17,7 +17,7 @@ strategy memoization function.
 ```no_run
 # mod i {
 # cfg_if::cfg_if!{
-#   if #[cfg(not(feature = "surf"))] {
+#   if #[cfg(not(feature = "surf-client"))] {
 #  pub fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
 #      Ok(())
 # }
@@ -99,13 +99,17 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
 * **backtrace** -
   Enable backtrace feature in anyhow (nightly only)
 * **default** -
-  The default feature enables the async-std/surf feature.
+  By default no features are enabled.
 * **functional** -
   Only relevant to developers: enables the functional test suite.
 * **reqwest-client** -
   Enables reqwest with OpenSSL TLS support
+* **reqwest-client-11** -
+  Enables reqwest 0.11 with OpenSSL TLS support
 * **reqwest-client-rustls** -
   Enables reqwest with RusTLS support
+* **reqwest-client-11-rustls** -
+  Enables reqwest 0.11 with RusTLS support
 * **strict** -
   Turn unexpected fields in API responses into errors
 * **surf-client** -
@@ -120,6 +124,7 @@ pub mod config;
 pub mod context;
 pub mod http;
 pub mod strategy;
+pub mod version;
 
 // Exports for ergonomical use
 pub use crate::client::{Client, ClientBuilder};
@@ -159,6 +164,8 @@ pub mod prelude {
             pub use surf::Client as DefaultClient;
         } else if #[cfg(feature = "reqwest")] {
             pub use reqwest::Client as DefaultClient;
+        } else if #[cfg(feature = "reqwest-11")] {
+            pub use reqwest_11::Client as DefaultClient;
         }
     }
 }

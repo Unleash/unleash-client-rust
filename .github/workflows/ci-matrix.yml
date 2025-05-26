@@ -14,6 +14,7 @@ jobs:
           - surf-client
           # no need for reqwest-client-rustls, it changes only internals of reqwest
           - reqwest-client
+          - reqwest-client-11
 
     steps:
       - uses: actions/checkout@v2
@@ -58,13 +59,13 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --features strict,surf-client,reqwest-client,reqwest-client-rustls --all-targets
+          args: --features strict,surf-client,reqwest-client,reqwest-client-rustls,reqwest-client-11,reqwest-client-11-rustls --all-targets
 
       - uses: actions-rs/cargo@v1
         # We test with approximately all-features to ensure that that does build (excludes nightly only backtrace)
         with:
           command: test
-          args: --features strict,surf-client,reqwest-client,reqwest-client-rustls --all-targets
+          args: --features strict,surf-client,reqwest-client,reqwest-client-rustls,reqwest-client-11,reqwest-client-11-rustls --all-targets
 
       - uses: actions-rs/cargo@v1
         with:
@@ -74,14 +75,14 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --features strict,surf-client,reqwest-client,reqwest-client-rustls --all-targets -- -D warnings
+          args: --features strict,surf-client,reqwest-client,reqwest-client-rustls,reqwest-client-11,reqwest-client-11-rustls --all-targets -- -D warnings
 
   msrv:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         rust:
-          - 1.59.0 # MSRV
+          - 1.63.0 # MSRV
 
     steps:
       - uses: actions/checkout@v2

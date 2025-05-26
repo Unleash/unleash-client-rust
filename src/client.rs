@@ -15,6 +15,7 @@ use log::{debug, trace, warn};
 use rand::Rng;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use uuid::Uuid;
 
 use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration, ToggleMetrics};
 use crate::context::Context;
@@ -72,15 +73,22 @@ impl ClientBuilder {
         F: EnumArray<CachedFeature> + Debug + DeserializeOwned + Serialize,
         C: HttpClient + Default,
     {
+        let connection_id = Uuid::new_v4().to_string();
         Ok(Client {
             api_url: api_url.into(),
             app_name: app_name.into(),
             disable_metric_submission: self.disable_metric_submission,
             enable_str_features: self.enable_str_features,
             instance_id: instance_id.into(),
+            connection_id: connection_id.clone(),
             interval: self.interval,
             polling: AtomicBool::new(false),
-            http: HTTP::new(app_name.into(), instance_id.into(), authorization)?,
+            http: HTTP::new(
+                app_name.into(),
+                instance_id.into(),
+                connection_id,
+                authorization,
+            )?,
             cached_state: ArcSwapOption::from(None),
             strategies: Mutex::new(self.strategies),
         })
@@ -229,6 +237,7 @@ where
     disable_metric_submission: bool,
     enable_str_features: bool,
     instance_id: String,
+    connection_id: String,
     interval: u64,
     polling: AtomicBool,
     // Permits making extension calls to the Unleash API not yet modelled in the Rust SDK.
@@ -258,17 +267,12 @@ where
     F: EnumArray<CachedFeature> + Clone + Debug + DeserializeOwned + Serialize,
 {
     fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
-        trace!(
-            "is_enabled: feature {:?} default {}, context {:?}",
-            feature_enum,
-            default,
-            context
-        );
-        let feature = &self.features[feature_enum.clone()];
-        let default_context = &Default::default();
-        let context = context.unwrap_or(default_context);
-
-        match (|| {
+        fn raw_enabled<F: Debug>(
+            feature: &CachedFeature,
+            feature_enum: F,
+            context: &Context,
+            default: bool,
+        ) -> bool {
             if feature.strategies.is_empty() && feature.known && !feature.feature_disabled {
                 trace!(
                     "is_enabled: feature {:?} has no strategies: enabling",
@@ -307,15 +311,26 @@ where
                 );
                 false
             }
-        })() {
-            true => {
-                feature.enabled.fetch_add(1, Ordering::Relaxed);
-                true
-            }
-            false => {
-                feature.disabled.fetch_add(1, Ordering::Relaxed);
-                false
-            }
+        }
+
+        trace!(
+            "is_enabled: feature {:?} default {}, context {:?}",
+            feature_enum,
+            default,
+            context
+        );
+        let feature = &self.features[feature_enum.clone()];
+        let default_context = &Default::default();
+        let context = context.unwrap_or(default_context);
+
+        let feature_enabled = raw_enabled(feature, feature_enum, context, default);
+
+        if feature_enabled {
+            feature.enabled.fetch_add(1, Ordering::Relaxed);
+            true
+        } else {
+            feature.disabled.fetch_add(1, Ordering::Relaxed);
+            false
         }
     }
 
@@ -749,12 +764,20 @@ where
                     feature.into(),
                 );
             }
-            for (name, feature) in &old.str_features {
-                bucket.toggles.insert(name.clone(), feature.into());
+            // Only create metrics for used str_features.
+            if self.enable_str_features {
+                for (name, feature) in &old.str_features {
+                    if feature.enabled.load(Ordering::Relaxed) != 0
+                        || feature.disabled.load(Ordering::Relaxed) != 0
+                    {
+                        bucket.toggles.insert(name.clone(), feature.into());
+                    }
+                }
             }
             let metrics = Metrics {
                 app_name: self.app_name.clone(),
                 instance_id: self.instance_id.clone(),
+                connection_id: self.connection_id.clone(),
                 bucket,
             };
             Ok(Some(metrics))
@@ -777,13 +800,16 @@ where
         self.polling.store(true, Ordering::Relaxed);
         loop {
             debug!("poll: retrieving features");
-            match self.http.get_json::<Features>(&endpoint).await {
+            match self.http.get_json(&endpoint, Some(self.interval)).await {
                 Ok(features) => match self.memoize(features.features) {
                     Ok(None) => {}
                     Ok(Some(metrics)) => {
                         if !self.disable_metric_submission {
                             let mut metrics_uploaded = false;
-                            let res = self.http.post_json(&metrics_endpoint, metrics).await;
+                            let res = self
+                                .http
+                                .post_json(&metrics_endpoint, metrics, Some(self.interval))
+                                .await;
                             if let Ok(successful) = res {
                                 if successful {
                                     metrics_uploaded = true;
@@ -819,6 +845,7 @@ where
         let registration = Registration {
             app_name: self.app_name.clone(),
             instance_id: self.instance_id.clone(),
+            connection_id: self.connection_id.clone(),
             interval: self.interval,
             strategies: self
                 .strategies
@@ -831,7 +858,7 @@ where
         };
         let success = self
             .http
-            .post_json(&Registration::endpoint(&self.api_url), &registration)
+            .post_json(&Registration::endpoint(&self.api_url), &registration, None)
             .await
             .map_err(|err| anyhow::anyhow!(err))?;
         if !success {
@@ -911,6 +938,8 @@ mod tests {
             use surf::Client as HttpClient;
         } else if #[cfg(feature = "reqwest")] {
             use reqwest::Client as HttpClient;
+        } else if #[cfg(feature = "reqwest-11")] {
+            use reqwest_11::Client as HttpClient;
         } else {
             compile_error!("Cannot run test suite without a client enabled");
         }

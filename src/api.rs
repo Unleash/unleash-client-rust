@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::default::Default;
 
+use crate::version::get_sdk_version;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +16,7 @@ pub struct Features {
 
 impl Features {
     pub fn endpoint(api_url: &str) -> String {
-        format!("{}/client/features", api_url)
+        format!("{}/client/features", api_url.trim_end_matches('/'))
     }
 }
 
@@ -63,6 +64,7 @@ pub enum ConstraintExpression {
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct Variant {
     pub name: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
     pub weight: u16,
     pub payload: Option<HashMap<String, String>>,
     pub overrides: Option<Vec<VariantOverride>>,
@@ -82,6 +84,8 @@ pub struct Registration {
     pub app_name: String,
     #[serde(rename = "instanceId")]
     pub instance_id: String,
+    #[serde(rename = "connectionId")]
+    pub connection_id: String,
     #[serde(rename = "sdkVersion")]
     pub sdk_version: String,
     pub strategies: Vec<String>,
@@ -91,7 +95,7 @@ pub struct Registration {
 
 impl Registration {
     pub fn endpoint(api_url: &str) -> String {
-        format!("{}/client/register", api_url)
+        format!("{}/client/register", api_url.trim_end_matches('/'))
     }
 }
 
@@ -100,7 +104,8 @@ impl Default for Registration {
         Self {
             app_name: "".into(),
             instance_id: "".into(),
-            sdk_version: "unleash-client-rust-0.1.0".into(),
+            connection_id: "".into(),
+            sdk_version: get_sdk_version().into(),
             strategies: vec![],
             started: Utc::now(),
             interval: 15 * 1000,
@@ -114,12 +119,14 @@ pub struct Metrics {
     pub app_name: String,
     #[serde(rename = "instanceId")]
     pub instance_id: String,
+    #[serde(rename = "connectionId")]
+    pub connection_id: String,
     pub bucket: MetricsBucket,
 }
 
 impl Metrics {
     pub fn endpoint(api_url: &str) -> String {
-        format!("{}/client/metrics", api_url)
+        format!("{}/client/metrics", api_url.trim_end_matches('/'))
     }
 }
 
@@ -137,9 +144,29 @@ pub struct MetricsBucket {
     pub toggles: HashMap<String, ToggleMetrics>,
 }
 
+fn deserialize_number_from_string<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: std::str::FromStr + serde::Deserialize<'de>,
+    <T as std::str::FromStr>::Err: std::fmt::Display,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrInt<T> {
+        String(String),
+        Number(T),
+    }
+
+    match StringOrInt::<T>::deserialize(deserializer)? {
+        StringOrInt::String(s) => s.parse::<T>().map_err(serde::de::Error::custom),
+        StringOrInt::Number(i) => Ok(i),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::Registration;
+
+    use super::{Features, Metrics, Registration};
 
     #[test]
     fn parse_reference_doc() -> Result<(), serde_json::Error> {
@@ -250,13 +277,54 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_variant_with_str_weight() -> Result<(), serde_json::Error> {
+        let data = r#"
+      {"name":"Foo","weight":"50","payload":{"type":"string","value":"bar"}}
+      "#;
+        let parsed: super::Variant = serde_json::from_str(data)?;
+        assert_eq!(50, parsed.weight);
+        Ok(())
+    }
+
+    #[test]
     fn test_registration_customisation() {
         Registration {
             app_name: "test-suite".into(),
             instance_id: "test".into(),
+            connection_id: "test".into(),
             strategies: vec!["default".into()],
             interval: 5000,
             ..Default::default()
         };
+    }
+
+    #[test]
+    fn test_endpoints_handle_trailing_slashes() {
+        assert_eq!(
+            Registration::endpoint("https://localhost:4242/api"),
+            "https://localhost:4242/api/client/register"
+        );
+        assert_eq!(
+            Registration::endpoint("https://localhost:4242/api/"),
+            "https://localhost:4242/api/client/register"
+        );
+
+        assert_eq!(
+            Features::endpoint("https://localhost:4242/api"),
+            "https://localhost:4242/api/client/features"
+        );
+        assert_eq!(
+            Features::endpoint("https://localhost:4242/api/"),
+            "https://localhost:4242/api/client/features"
+        );
+
+        assert_eq!(
+            Metrics::endpoint("https://localhost:4242/api"),
+            "https://localhost:4242/api/client/metrics"
+        );
+        assert_eq!(
+            Metrics::endpoint("https://localhost:4242/api/"),
+            "https://localhost:4242/api/client/metrics"
+        );
     }
 }
