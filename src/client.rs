@@ -800,7 +800,7 @@ where
         self.polling.store(true, Ordering::Relaxed);
         loop {
             debug!("poll: retrieving features");
-            match self.http.get_json(&endpoint, Some(self.interval)).await {
+            match self.http.get_json::<Features>(&endpoint, Some(self.interval)).await {
                 Ok(features) => match self.memoize(features.features) {
                     Ok(None) => {}
                     Ok(Some(metrics)) => {
