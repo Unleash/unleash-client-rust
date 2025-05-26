@@ -800,10 +800,12 @@ where
         self.polling.store(true, Ordering::Relaxed);
         loop {
             debug!("poll: retrieving features");
-            let res = self.http.get_json(&endpoint, Some(self.interval)).await;
-            if let Ok(res) = res {
-                let features: Features = res;
-                match self.memoize(features.features) {
+            match self
+                .http
+                .get_json::<Features>(&endpoint, Some(self.interval))
+                .await
+            {
+                Ok(features) => match self.memoize(features.features) {
                     Ok(None) => {}
                     Ok(Some(metrics)) => {
                         if !self.disable_metric_submission {
@@ -823,12 +825,13 @@ where
                             }
                         }
                     }
-                    Err(_) => {
-                        warn!("poll: failed to memoize features");
+                    Err(err) => {
+                        warn!("poll: failed to memoize features: {:?}", err);
                     }
+                },
+                Err(err) => {
+                    warn!("poll: failed to retrieve features: {:?}", err);
                 }
-            } else {
-                warn!("poll: failed to retrieve features");
             }
 
             let duration = Duration::from_millis(self.interval);
