@@ -11,7 +11,7 @@ name = "unleash-api-client"
 readme = "README.md"
 repository = "https://github.com/Unleash/unleash-client-rust/"
 rust-version = "1.60"
-version = "0.12.0"
+version = "0.12.1"
 
 [badges]
 [badges.maintenance]
@@ -91,8 +91,8 @@ criterion = "0.3.5"     # Remember to update audit.toml
 futures = "0.3.17"
 maplit = "1.0.2"
 num_cpus = "1.13.0"
-simple_logger = "2.1.0"
 regex = "1.9.6"
+simple_logger = "2.1.0"
 
 [dev-dependencies.tokio]
 features = ["macros", "rt-multi-thread", "time"]
