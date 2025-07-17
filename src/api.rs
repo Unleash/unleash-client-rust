@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::default::Default;
 
 use crate::version::get_sdk_version;
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, Utc};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
@@ -57,9 +57,9 @@ pub struct Constraint {
 pub enum ConstraintExpression {
     //. Dates
     #[serde(rename = "DATE_AFTER")]
-    DateAfter(DateTime<FixedOffset>),
+    DateAfter(DateTime<Utc>),
     #[serde(rename = "DATE_BEFORE")]
-    DateBefore(DateTime<FixedOffset>),
+    DateBefore(DateTime<Utc>),
 
     // In
     #[serde(rename = "IN")]
