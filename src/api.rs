@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::default::Default;
 
 use crate::version::get_sdk_version;
-use chrono::Utc;
+use chrono::{DateTime, FixedOffset, Utc};
+use semver::Version;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -54,10 +55,45 @@ pub struct Constraint {
 #[serde(tag = "operator", content = "values")]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub enum ConstraintExpression {
+    //. Dates
+    #[serde(rename = "DATE_AFTER")]
+    DateAfter(DateTime<FixedOffset>),
+    #[serde(rename = "DATE_BEFORE")]
+    DateBefore(DateTime<FixedOffset>),
+
+    // In
     #[serde(rename = "IN")]
     In(Vec<String>),
     #[serde(rename = "NOT_IN")]
     NotIn(Vec<String>),
+
+    // Numbers
+    #[serde(rename = "NUM_EQ")]
+    NumEq(String),
+    #[serde(rename = "NUM_GT")]
+    NumGT(String),
+    #[serde(rename = "NUM_GTE")]
+    NumGTE(String),
+    #[serde(rename = "NUM_LT")]
+    NumLT(String),
+    #[serde(rename = "NUM_LTE")]
+    NumLTE(String),
+
+    // Semver
+    #[serde(rename = "SEMVER_EQ")]
+    SemverEq(Version),
+    #[serde(rename = "SEMVER_GT")]
+    SemverGT(Version),
+    #[serde(rename = "SEMVER_LT")]
+    SemverLT(Version),
+
+    // String
+    #[serde(rename = "STR_CONTAINS")]
+    StrContains(Vec<String>),
+    #[serde(rename = "STR_STARTS_WITH")]
+    StrStartsWith(Vec<String>),
+    #[serde(rename = "STR_ENDS_WITH")]
+    StrEndsWith(Vec<String>),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

@@ -6,10 +6,12 @@ use std::hash::BuildHasher;
 use std::io::Cursor;
 use std::net::IpAddr;
 
+use chrono::DateTime;
 use ipnet::IpNet;
 use log::{trace, warn};
 use murmur3::murmur3_32;
 use rand::Rng;
+use semver::Version;
 
 use crate::api::{Constraint, ConstraintExpression};
 use crate::context::Context;
@@ -337,6 +339,99 @@ where
                 })
             }
         }
+        ConstraintExpression::StrContains(values) => {
+            let as_set: HashSet<String> = values.iter().cloned().collect();
+            Box::new(move |context: &Context| {
+                getter(context).map(|v| as_set.contains(v)).unwrap_or(false)
+            })
+        }
+        ConstraintExpression::StrStartsWith(values) => {
+            let as_vec: Vec<String> = values.iter().cloned().collect();
+            Box::new(move |context: &Context| {
+                getter(context)
+                    .map(|v| as_vec.iter().any(|entry| v.starts_with(entry)))
+                    .unwrap_or(false)
+            })
+        }
+        ConstraintExpression::StrEndsWith(values) => {
+            let as_vec: Vec<String> = values.iter().cloned().collect();
+            Box::new(move |context: &Context| {
+                getter(context)
+                    .map(|v| as_vec.iter().any(|entry| v.ends_with(entry)))
+                    .unwrap_or(false)
+            })
+        }
+        ConstraintExpression::NumEq(value) => {
+            Box::new(move |context: &Context| getter(context).map(|v| v == value).unwrap_or(false))
+        }
+        ConstraintExpression::NumGT(value) => {
+            let as_num = str::parse::<usize>(&value).ok();
+
+            Box::new(move |context: &Context| {
+                getter(context)
+                    .and_then(|v| str::parse::<usize>(v).ok())
+                    .zip(as_num)
+                    .map(|(ctx_v, val)| ctx_v > val)
+                    .unwrap_or(false)
+            })
+        }
+        ConstraintExpression::NumGTE(value) => Box::new(move |context: &Context| {
+            let as_num = str::parse::<usize>(&value).ok();
+
+            getter(context)
+                .and_then(|v| str::parse::<usize>(v).ok())
+                .zip(as_num)
+                .map(|(ctx_v, val)| ctx_v >= val)
+                .unwrap_or(false)
+        }),
+        ConstraintExpression::NumLT(value) => Box::new(move |context: &Context| {
+            let as_num = str::parse::<usize>(&value).ok();
+
+            getter(context)
+                .and_then(|v| str::parse::<usize>(v).ok())
+                .zip(as_num)
+                .map(|(ctx_v, val)| ctx_v < val)
+                .unwrap_or(false)
+        }),
+        ConstraintExpression::NumLTE(value) => Box::new(move |context: &Context| {
+            let as_num = str::parse::<usize>(&value).ok();
+
+            getter(context)
+                .and_then(|v| str::parse::<usize>(v).ok())
+                .zip(as_num)
+                .map(|(ctx_v, val)| ctx_v <= val)
+                .unwrap_or(false)
+        }),
+        ConstraintExpression::SemverEq(value) => Box::new(move |context: &Context| {
+            getter(context)
+                .and_then(|ctx| Version::parse(ctx).ok())
+                .map(|v| v == *value)
+                .unwrap_or(false)
+        }),
+        ConstraintExpression::SemverGT(value) => Box::new(move |context: &Context| {
+            getter(context)
+                .and_then(|ctx| Version::parse(ctx).ok())
+                .map(|v| v > *value)
+                .unwrap_or(false)
+        }),
+        ConstraintExpression::SemverLT(value) => Box::new(move |context: &Context| {
+            getter(context)
+                .and_then(|ctx| Version::parse(ctx).ok())
+                .map(|v| v < *value)
+                .unwrap_or(false)
+        }),
+        ConstraintExpression::DateAfter(value) => Box::new(move |context: &Context| {
+            getter(context)
+                .and_then(|d| DateTime::parse_from_rfc3339(d).ok())
+                .map(|v| v > *value)
+                .unwrap_or(false)
+        }),
+        ConstraintExpression::DateBefore(value) => Box::new(move |context: &Context| {
+            getter(context)
+                .and_then(|d| DateTime::parse_from_rfc3339(d).ok())
+                .map(|v| v < *value)
+                .unwrap_or(false)
+        }),
     }
 }
 
@@ -396,6 +491,17 @@ where
                 })
             }
         }
+        ConstraintExpression::StrContains(items) => todo!(),
+        ConstraintExpression::StrStartsWith(items) => todo!(),
+        ConstraintExpression::StrEndsWith(items) => todo!(),
+        ConstraintExpression::NumEq(_) => todo!(),
+        ConstraintExpression::NumGT(_) => todo!(),
+        ConstraintExpression::NumGTE(_) => todo!(),
+        ConstraintExpression::NumLT(_) => todo!(),
+        ConstraintExpression::NumLTE(_) => todo!(),
+        ConstraintExpression::SemverEq(_) => todo!(),
+        ConstraintExpression::SemverGT(_) => todo!(),
+        ConstraintExpression::SemverLT(_) => todo!(),
     }
 }
 
