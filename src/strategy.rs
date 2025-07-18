@@ -316,15 +316,20 @@ pub fn hostname<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) 
 }
 
 /// returns true if the strategy should be delegated to, false to disable
-fn _compile_constraint_string<F>(expression: ConstraintExpression, getter: F) -> Evaluate
+fn _compile_constraint_string<F, B>(
+    expression: ConstraintExpression,
+    apply_invert: B,
+    getter: F,
+) -> Evaluate
 where
     F: Fn(&Context) -> Option<&String> + Clone + Sync + Send + 'static,
+    B: Fn(bool) -> bool + Sync + Send + Clone + 'static,
 {
-    match &expression {
+    match expression {
         ConstraintExpression::In { values } => {
             let as_set: HashSet<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
-                getter(context).map(|v| as_set.contains(v)).unwrap_or(false)
+                apply_invert(getter(context).map(|v| as_set.contains(v)).unwrap_or(false))
             })
         }
         ConstraintExpression::NotIn { values } => {
@@ -333,123 +338,116 @@ where
             } else {
                 let as_set: HashSet<String> = values.iter().cloned().collect();
                 Box::new(move |context: &Context| {
-                    getter(context)
-                        .map(|v| !as_set.contains(v))
-                        .unwrap_or(false)
+                    apply_invert(
+                        getter(context)
+                            .map(|v| !as_set.contains(v))
+                            .unwrap_or(false),
+                    )
                 })
             }
         }
         ConstraintExpression::StrContains { values } => {
             let as_set: HashSet<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
-                getter(context).map(|v| as_set.contains(v)).unwrap_or(false)
+                apply_invert(getter(context).map(|v| as_set.contains(v)).unwrap_or(false))
             })
         }
         ConstraintExpression::StrStartsWith { values } => {
             let as_vec: Vec<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
-                getter(context)
-                    .map(|v| as_vec.iter().any(|entry| v.starts_with(entry)))
-                    .unwrap_or(false)
+                apply_invert(
+                    getter(context)
+                        .map(|v| as_vec.iter().any(|entry| v.starts_with(entry)))
+                        .unwrap_or(false),
+                )
             })
         }
         ConstraintExpression::StrEndsWith { values } => {
             let as_vec: Vec<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
-                getter(context)
-                    .map(|v| as_vec.iter().any(|entry| v.ends_with(entry)))
-                    .unwrap_or(false)
+                apply_invert(
+                    getter(context)
+                        .map(|v| as_vec.iter().any(|entry| v.ends_with(entry)))
+                        .unwrap_or(false),
+                )
             })
         }
-        ConstraintExpression::NumEq { value } => {
-            let value = value.clone();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .and_then(|v| str::parse::<usize>(v).ok())
-                    .map(|v| v == value)
-                    .unwrap_or(false)
-            })
-        }
-        ConstraintExpression::NumGT { value } => {
-            let value = value.clone();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .and_then(|v| str::parse::<usize>(v).ok())
-                    .map(|v| v > value)
-                    .unwrap_or(false)
-            })
-        }
-        ConstraintExpression::NumGTE { value } => {
-            let value = value.clone();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .and_then(|v| str::parse::<usize>(v).ok())
-                    .map(|v| v >= value)
-                    .unwrap_or(false)
-            })
-        }
-        ConstraintExpression::NumLT { value } => {
-            let value = value.clone();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .and_then(|v| str::parse::<usize>(v).ok())
-                    .map(|v| v < value)
-                    .unwrap_or(false)
-            })
-        }
-        ConstraintExpression::NumLTE { value } => {
-            let value = value.clone();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .and_then(|v| str::parse::<usize>(v).ok())
-                    .map(|v| v <= value)
-                    .unwrap_or(false)
-            })
-        }
-        ConstraintExpression::SemverEq { value } => {
-            let value = value.clone();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .and_then(|ctx| Version::parse(ctx).ok())
-                    .map(|v| v == value)
-                    .unwrap_or(false)
-            })
-        }
-        ConstraintExpression::SemverGT { value } => {
-            let value = value.clone();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .and_then(|ctx| Version::parse(ctx).ok())
-                    .map(|v| v > value)
-                    .unwrap_or(false)
-            })
-        }
-        ConstraintExpression::SemverLT { value } => {
-            let value = value.clone();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .and_then(|ctx| Version::parse(ctx).ok())
-                    .map(|v| v < value)
-                    .unwrap_or(false)
-            })
-        }
+        ConstraintExpression::NumEq { value } => Box::new(move |context: &Context| {
+            let result = getter(context)
+                .and_then(|v| str::parse::<usize>(v).ok())
+                .map(|v| v == value)
+                .unwrap_or(false);
+            apply_invert(result)
+        }),
+        ConstraintExpression::NumGT { value } => Box::new(move |context: &Context| {
+            let result = getter(context)
+                .and_then(|v| str::parse::<usize>(v).ok())
+                .map(|v| v > value)
+                .unwrap_or(false);
+            apply_invert(result)
+        }),
+        ConstraintExpression::NumGTE { value } => Box::new(move |context: &Context| {
+            let result = getter(context)
+                .and_then(|v| str::parse::<usize>(v).ok())
+                .map(|v| v >= value)
+                .unwrap_or(false);
+            apply_invert(result)
+        }),
+        ConstraintExpression::NumLT { value } => Box::new(move |context: &Context| {
+            let result = getter(context)
+                .and_then(|v| str::parse::<usize>(v).ok())
+                .map(|v| v < value)
+                .unwrap_or(false);
+            apply_invert(result)
+        }),
+        ConstraintExpression::NumLTE { value } => Box::new(move |context: &Context| {
+            let result = getter(context)
+                .and_then(|v| str::parse::<usize>(v).ok())
+                .map(|v| v <= value)
+                .unwrap_or(false);
+            apply_invert(result)
+        }),
+        ConstraintExpression::SemverEq { value } => Box::new(move |context: &Context| {
+            let result = getter(context)
+                .and_then(|ctx| Version::parse(ctx).ok())
+                .map(|v| v == value)
+                .unwrap_or(false);
+            apply_invert(result)
+        }),
+        ConstraintExpression::SemverGT { value } => Box::new(move |context: &Context| {
+            let result = getter(context)
+                .and_then(|ctx| Version::parse(ctx).ok())
+                .map(|v| v > value)
+                .unwrap_or(false);
+            apply_invert(result)
+        }),
+        ConstraintExpression::SemverLT { value } => Box::new(move |context: &Context| {
+            let result = getter(context)
+                .and_then(|ctx| Version::parse(ctx).ok())
+                .map(|v| v < value)
+                .unwrap_or(false);
+            apply_invert(result)
+        }),
         _ => Box::new(|_| false),
     }
 }
 
 /// returns true if the strategy should be delegated to, false to disable
-fn _compile_constraint_date<F>(expression: ConstraintExpression, getter: F) -> Evaluate
+fn _compile_constraint_date<F, B>(
+    expression: ConstraintExpression,
+    apply_invert: B,
+    getter: F,
+) -> Evaluate
 where
-    F: Fn(&Context) -> Option<&DateTime<Utc>> + Clone + Sync + Send + 'static,
+    F: Fn(&Context) -> DateTime<Utc> + Clone + Sync + Send + 'static,
+    B: Fn(bool) -> bool + Sync + Send + Clone + 'static,
 {
-    match &expression {
+    match expression {
         ConstraintExpression::DateAfter { value } => {
-            let value = value.clone();
-            Box::new(move |context: &Context| getter(context).map(|v| *v > value).unwrap_or(false))
+            Box::new(move |context: &Context| apply_invert(getter(context) > value))
         }
         ConstraintExpression::DateBefore { value } => {
-            let value = value.clone();
-            Box::new(move |context: &Context| getter(context).map(|v| *v < value).unwrap_or(false))
+            Box::new(move |context: &Context| apply_invert(getter(context) < value))
         }
         _ => Box::new(|_| false),
     }
@@ -469,15 +467,20 @@ fn _ip_to_vec(ips: &[String]) -> Vec<IpNet> {
 }
 
 /// returns true if the strategy should be delegated to, false to disable
-fn _compile_constraint_host<F>(expression: ConstraintExpression, getter: F) -> Evaluate
+fn _compile_constraint_host<F, B>(
+    expression: ConstraintExpression,
+    apply_invert: B,
+    getter: F,
+) -> Evaluate
 where
     F: Fn(&Context) -> Option<&crate::context::IPAddress> + Clone + Sync + Send + 'static,
+    B: Fn(bool) -> bool + Sync + Send + Clone + 'static,
 {
     match &expression {
         ConstraintExpression::In { values } => {
             let ips = _ip_to_vec(values);
             Box::new(move |context: &Context| {
-                getter(context)
+                let result = getter(context)
                     .map(|remote_address| {
                         for ip in &ips {
                             if ip.contains(&remote_address.0) {
@@ -486,7 +489,8 @@ where
                         }
                         false
                     })
-                    .unwrap_or(false)
+                    .unwrap_or(false);
+                apply_invert(result)
             })
         }
         ConstraintExpression::NotIn { values } => {
@@ -495,7 +499,7 @@ where
             } else {
                 let ips = _ip_to_vec(values);
                 Box::new(move |context: &Context| {
-                    getter(context)
+                    let result = getter(context)
                         .map(|remote_address| {
                             if ips.is_empty() {
                                 return false;
@@ -507,44 +511,58 @@ where
                             }
                             true
                         })
-                        .unwrap_or(false)
+                        .unwrap_or(false);
+                    apply_invert(result)
                 })
             }
         }
         ConstraintExpression::StrContains { values } => {
             let as_set: HashSet<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
-                getter(context)
+                let result = getter(context)
                     .map(|v| {
                         let v = v.0.to_string();
                         as_set.contains(&v)
                     })
-                    .unwrap_or(false)
+                    .unwrap_or(false);
+                apply_invert(result)
             })
         }
         ConstraintExpression::StrStartsWith { values } => {
             let as_vec: Vec<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
-                getter(context)
+                let result = getter(context)
                     .map(|v| {
                         let v = v.0.to_string();
                         as_vec.iter().any(|entry| v.starts_with(entry))
                     })
-                    .unwrap_or(false)
+                    .unwrap_or(false);
+                apply_invert(result)
             })
         }
         ConstraintExpression::StrEndsWith { values } => {
             let as_vec: Vec<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
-                getter(context)
+                let result = getter(context)
                     .map(|v| {
                         let v = v.0.to_string();
                         as_vec.iter().any(|entry| v.ends_with(entry))
                     })
-                    .unwrap_or(false)
+                    .unwrap_or(false);
+                apply_invert(result)
             })
         }
         _ => Box::new(|_| false),
+    }
+}
+
+fn _apply_invert(inverted: Option<bool>) -> impl Fn(bool) -> bool + Clone {
+    move |state| {
+        if inverted.unwrap_or_default() {
+            !state
+        } else {
+            state
+        }
     }
 }
 
@@ -552,27 +570,33 @@ fn _compile_constraints(constraints: Vec<Constraint>) -> Vec<Evaluate> {
     constraints
         .into_iter()
         .map(|constraint| {
-            let (context_name, expression) = (constraint.context_name, constraint.expression);
+            let (context_name, expression, inverted) = (
+                constraint.context_name,
+                constraint.expression,
+                constraint.inverted,
+            );
+            let apply_invert = _apply_invert(inverted);
+
             match context_name.as_str() {
-                "appName" => {
-                    _compile_constraint_string(expression, |context| Some(&context.app_name))
-                }
-                "environment" => {
-                    _compile_constraint_string(expression, |context| Some(&context.environment))
-                }
-                "remoteAddress" => {
-                    _compile_constraint_host(expression, |context| context.remote_address.as_ref())
-                }
-                "sessionId" => {
-                    _compile_constraint_string(expression, |context| context.session_id.as_ref())
-                }
-                "userId" => {
-                    _compile_constraint_string(expression, |context| context.user_id.as_ref())
-                }
-                "currentTime" => {
-                    _compile_constraint_date(expression, |context| context.current_time.as_ref())
-                }
-                _ => _compile_constraint_string(expression, move |context| {
+                "appName" => _compile_constraint_string(expression, apply_invert, |context| {
+                    Some(&context.app_name)
+                }),
+                "environment" => _compile_constraint_string(expression, apply_invert, |context| {
+                    Some(&context.environment)
+                }),
+                "remoteAddress" => _compile_constraint_host(expression, apply_invert, |context| {
+                    context.remote_address.as_ref()
+                }),
+                "sessionId" => _compile_constraint_string(expression, apply_invert, |context| {
+                    context.session_id.as_ref()
+                }),
+                "userId" => _compile_constraint_string(expression, apply_invert, |context| {
+                    context.user_id.as_ref()
+                }),
+                "currentTime" => _compile_constraint_date(expression, apply_invert, |context| {
+                    context.current_time
+                }),
+                _ => _compile_constraint_string(expression, apply_invert, move |context| {
                     context.properties.get(&context_name)
                 }),
             }
