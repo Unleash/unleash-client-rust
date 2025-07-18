@@ -37,7 +37,7 @@ pub struct Context {
     #[serde(rename = "remoteAddress")]
     pub remote_address: Option<IPAddress>,
     #[serde(default)]
-    pub properties: HashMap<String, String>,
+    pub properties: HashMap<String, Option<String>>,
     #[serde(default, rename = "appName")]
     pub app_name: String,
     #[serde(default)]
@@ -45,6 +45,12 @@ pub struct Context {
     /// Defaults to the current time.
     #[serde(rename = "currentTime", default = "Utc::now")]
     pub current_time: DateTime<Utc>,
+}
+
+impl Context {
+    pub fn get_property(&self, prop_key: &str) -> Option<&String> {
+        self.properties.get(prop_key).into_iter().flatten().next()
+    }
 }
 
 impl Default for Context {
