@@ -43,57 +43,75 @@ pub struct Strategy {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct Constraint {
     #[serde(rename = "contextName")]
     pub context_name: String,
+    #[serde(rename = "caseInsensitive")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub case_insensitive: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub inverted: Option<bool>,
     #[serde(flatten)]
     pub expression: ConstraintExpression,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-#[serde(tag = "operator", content = "values")]
-#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
+#[serde(tag = "operator")]
 pub enum ConstraintExpression {
     //. Dates
     #[serde(rename = "DATE_AFTER")]
-    DateAfter(DateTime<Utc>),
+    DateAfter { value: DateTime<Utc> },
     #[serde(rename = "DATE_BEFORE")]
-    DateBefore(DateTime<Utc>),
+    DateBefore { value: DateTime<Utc> },
 
     // In
     #[serde(rename = "IN")]
-    In(Vec<String>),
+    In { values: Vec<String> },
     #[serde(rename = "NOT_IN")]
-    NotIn(Vec<String>),
+    NotIn { values: Vec<String> },
 
     // Numbers
     #[serde(rename = "NUM_EQ")]
-    NumEq(String),
+    NumEq {
+        #[serde(deserialize_with = "deserialize_number_from_string")]
+        value: usize,
+    },
     #[serde(rename = "NUM_GT")]
-    NumGT(String),
+    NumGT {
+        #[serde(deserialize_with = "deserialize_number_from_string")]
+        value: usize,
+    },
     #[serde(rename = "NUM_GTE")]
-    NumGTE(String),
+    NumGTE {
+        #[serde(deserialize_with = "deserialize_number_from_string")]
+        value: usize,
+    },
     #[serde(rename = "NUM_LT")]
-    NumLT(String),
+    NumLT {
+        #[serde(deserialize_with = "deserialize_number_from_string")]
+        value: usize,
+    },
     #[serde(rename = "NUM_LTE")]
-    NumLTE(String),
+    NumLTE {
+        #[serde(deserialize_with = "deserialize_number_from_string")]
+        value: usize,
+    },
 
     // Semver
     #[serde(rename = "SEMVER_EQ")]
-    SemverEq(Version),
+    SemverEq { value: Version },
     #[serde(rename = "SEMVER_GT")]
-    SemverGT(Version),
+    SemverGT { value: Version },
     #[serde(rename = "SEMVER_LT")]
-    SemverLT(Version),
+    SemverLT { value: Version },
 
     // String
     #[serde(rename = "STR_CONTAINS")]
-    StrContains(Vec<String>),
+    StrContains { values: Vec<String> },
     #[serde(rename = "STR_STARTS_WITH")]
-    StrStartsWith(Vec<String>),
+    StrStartsWith { values: Vec<String> },
     #[serde(rename = "STR_ENDS_WITH")]
-    StrEndsWith(Vec<String>),
+    StrEndsWith { values: Vec<String> },
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -319,6 +337,53 @@ mod tests {
       "#;
         let parsed: super::Variant = serde_json::from_str(data)?;
         assert_eq!(50, parsed.weight);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_constraint() -> Result<(), serde_json::Error> {
+        let data = r#"[
+          {
+            "contextName": "appId",
+            "operator": "IN",
+            "values": [
+                "app.known.name"
+            ],
+            "caseInsensitive": false,
+            "inverted": false
+          },
+          {
+            "contextName": "currentTime",
+            "operator": "DATE_AFTER",
+            "caseInsensitive": false,
+            "inverted": false,
+            "value": "2025-07-17T23:59:00.000Z"
+          },
+          {
+            "contextName": "remoteAddress",
+            "operator": "NUM_GTE",
+            "caseInsensitive": false,
+            "inverted": false,
+            "value": "3333"
+          },
+          {
+            "contextName": "appId",
+            "operator": "NUM_EQ",
+            "caseInsensitive": false,
+            "inverted": false,
+            "value": "888"
+          },
+          {
+            "contextName": "appId",
+            "operator": "SEMVER_EQ",
+            "caseInsensitive": false,
+            "inverted": false,
+            "value": "1.2.3"
+          }
+        ]"#;
+        let parsed: Vec<super::Constraint> = serde_json::from_str(data)?;
+        dbg!(parsed);
+        // assert_eq!(1, parsed.version);
         Ok(())
     }
 

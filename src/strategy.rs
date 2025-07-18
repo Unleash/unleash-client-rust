@@ -321,13 +321,13 @@ where
     F: Fn(&Context) -> Option<&String> + Clone + Sync + Send + 'static,
 {
     match &expression {
-        ConstraintExpression::In(values) => {
+        ConstraintExpression::In { values } => {
             let as_set: HashSet<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
                 getter(context).map(|v| as_set.contains(v)).unwrap_or(false)
             })
         }
-        ConstraintExpression::NotIn(values) => {
+        ConstraintExpression::NotIn { values } => {
             if values.is_empty() {
                 Box::new(|_| true)
             } else {
@@ -339,13 +339,13 @@ where
                 })
             }
         }
-        ConstraintExpression::StrContains(values) => {
+        ConstraintExpression::StrContains { values } => {
             let as_set: HashSet<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
                 getter(context).map(|v| as_set.contains(v)).unwrap_or(false)
             })
         }
-        ConstraintExpression::StrStartsWith(values) => {
+        ConstraintExpression::StrStartsWith { values } => {
             let as_vec: Vec<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
                 getter(context)
@@ -353,7 +353,7 @@ where
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::StrEndsWith(values) => {
+        ConstraintExpression::StrEndsWith { values } => {
             let as_vec: Vec<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
                 getter(context)
@@ -361,57 +361,52 @@ where
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::NumEq(value) => {
-            let as_num = str::parse::<usize>(&value).ok();
+        ConstraintExpression::NumEq { value } => {
+            let value = value.clone();
             Box::new(move |context: &Context| {
                 getter(context)
                     .and_then(|v| str::parse::<usize>(v).ok())
-                    .zip(as_num)
-                    .map(|(ctx_v, val)| ctx_v == val)
+                    .map(|v| v == value)
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::NumGT(value) => {
-            let as_num = str::parse::<usize>(&value).ok();
+        ConstraintExpression::NumGT { value } => {
+            let value = value.clone();
             Box::new(move |context: &Context| {
                 getter(context)
                     .and_then(|v| str::parse::<usize>(v).ok())
-                    .zip(as_num)
-                    .map(|(ctx_v, val)| ctx_v > val)
+                    .map(|v| v > value)
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::NumGTE(value) => {
-            let as_num = str::parse::<usize>(&value).ok();
+        ConstraintExpression::NumGTE { value } => {
+            let value = value.clone();
             Box::new(move |context: &Context| {
                 getter(context)
                     .and_then(|v| str::parse::<usize>(v).ok())
-                    .zip(as_num)
-                    .map(|(ctx_v, val)| ctx_v >= val)
+                    .map(|v| v >= value)
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::NumLT(value) => {
-            let as_num = str::parse::<usize>(&value).ok();
+        ConstraintExpression::NumLT { value } => {
+            let value = value.clone();
             Box::new(move |context: &Context| {
                 getter(context)
                     .and_then(|v| str::parse::<usize>(v).ok())
-                    .zip(as_num)
-                    .map(|(ctx_v, val)| ctx_v < val)
+                    .map(|v| v < value)
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::NumLTE(value) => {
-            let as_num = str::parse::<usize>(&value).ok();
+        ConstraintExpression::NumLTE { value } => {
+            let value = value.clone();
             Box::new(move |context: &Context| {
                 getter(context)
                     .and_then(|v| str::parse::<usize>(v).ok())
-                    .zip(as_num)
-                    .map(|(ctx_v, val)| ctx_v <= val)
+                    .map(|v| v <= value)
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::SemverEq(value) => {
+        ConstraintExpression::SemverEq { value } => {
             let value = value.clone();
             Box::new(move |context: &Context| {
                 getter(context)
@@ -420,7 +415,7 @@ where
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::SemverGT(value) => {
+        ConstraintExpression::SemverGT { value } => {
             let value = value.clone();
             Box::new(move |context: &Context| {
                 getter(context)
@@ -429,7 +424,7 @@ where
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::SemverLT(value) => {
+        ConstraintExpression::SemverLT { value } => {
             let value = value.clone();
             Box::new(move |context: &Context| {
                 getter(context)
@@ -448,11 +443,11 @@ where
     F: Fn(&Context) -> Option<&DateTime<Utc>> + Clone + Sync + Send + 'static,
 {
     match &expression {
-        ConstraintExpression::DateAfter(value) => {
+        ConstraintExpression::DateAfter { value } => {
             let value = value.clone();
             Box::new(move |context: &Context| getter(context).map(|v| *v > value).unwrap_or(false))
         }
-        ConstraintExpression::DateBefore(value) => {
+        ConstraintExpression::DateBefore { value } => {
             let value = value.clone();
             Box::new(move |context: &Context| getter(context).map(|v| *v < value).unwrap_or(false))
         }
@@ -479,7 +474,7 @@ where
     F: Fn(&Context) -> Option<&crate::context::IPAddress> + Clone + Sync + Send + 'static,
 {
     match &expression {
-        ConstraintExpression::In(values) => {
+        ConstraintExpression::In { values } => {
             let ips = _ip_to_vec(values);
             Box::new(move |context: &Context| {
                 getter(context)
@@ -494,7 +489,7 @@ where
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::NotIn(values) => {
+        ConstraintExpression::NotIn { values } => {
             if values.is_empty() {
                 Box::new(|_| false)
             } else {
@@ -516,7 +511,7 @@ where
                 })
             }
         }
-        ConstraintExpression::StrContains(values) => {
+        ConstraintExpression::StrContains { values } => {
             let as_set: HashSet<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
                 getter(context)
@@ -527,7 +522,7 @@ where
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::StrStartsWith(values) => {
+        ConstraintExpression::StrStartsWith { values } => {
             let as_vec: Vec<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
                 getter(context)
@@ -538,7 +533,7 @@ where
                     .unwrap_or(false)
             })
         }
-        ConstraintExpression::StrEndsWith(values) => {
+        ConstraintExpression::StrEndsWith { values } => {
             let as_vec: Vec<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
                 getter(context)
@@ -639,6 +634,15 @@ mod tests {
         Some(IPAddress(addr.parse().unwrap()))
     }
 
+    fn default_constraint() -> Constraint {
+        Constraint {
+            context_name: "".into(),
+            case_insensitive: None,
+            inverted: None,
+            expression: ConstraintExpression::In { values: vec![] },
+        }
+    }
+
     #[test]
     fn test_constrain() {
         // Without constraints, things should just pass through
@@ -659,7 +663,8 @@ mod tests {
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "".into(),
-                expression: ConstraintExpression::In(vec![]),
+                expression: ConstraintExpression::In { values: vec![] },
+                ..default_constraint()
             }]),
             &super::default,
             None
@@ -673,7 +678,10 @@ mod tests {
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::In(vec!["development".into()]),
+                expression: ConstraintExpression::In {
+                    values: vec!["development".into()]
+                },
+                ..default_constraint()
             }]),
             &super::default,
             None
@@ -687,7 +695,10 @@ mod tests {
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::NotIn(vec!["development".into()]),
+                expression: ConstraintExpression::NotIn {
+                    values: vec!["development".into()]
+                },
+                ..default_constraint()
             }]),
             &super::default,
             None
@@ -701,7 +712,10 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::In(vec!["development".into()]),
+                expression: ConstraintExpression::In {
+                    values: vec!["development".into()]
+                },
+                ..default_constraint()
             }]),
             &super::default,
             None
@@ -714,7 +728,10 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::In(vec!["staging".into(), "development".into()]),
+                expression: ConstraintExpression::In {
+                    values: vec!["staging".into(), "development".into()]
+                },
+                ..default_constraint()
             }]),
             &super::default,
             None
@@ -728,10 +745,10 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "environment".into(),
-                expression: ConstraintExpression::NotIn(vec![
-                    "staging".into(),
-                    "development".into()
-                ]),
+                expression: ConstraintExpression::NotIn {
+                    values: vec!["staging".into(), "development".into()]
+                },
+                ..default_constraint()
             }]),
             &super::default,
             None
@@ -747,7 +764,10 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "userId".into(),
-                expression: ConstraintExpression::In(vec!["fred".into()]),
+                expression: ConstraintExpression::In {
+                    values: vec!["fred".into()]
+                },
+                ..default_constraint()
             }]),
             &super::default,
             None
@@ -761,7 +781,10 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "sessionId".into(),
-                expression: ConstraintExpression::In(vec!["qwerty".into()]),
+                expression: ConstraintExpression::In {
+                    values: vec!["qwerty".into()]
+                },
+                ..default_constraint()
             }]),
             &super::default,
             None
@@ -775,7 +798,10 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "remoteAddress".into(),
-                expression: ConstraintExpression::In(vec!["10.0.0.0/8".into()]),
+                expression: ConstraintExpression::In {
+                    values: vec!["10.0.0.0/8".into()]
+                },
+                ..default_constraint()
             }]),
             &super::default,
             None
@@ -787,7 +813,10 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "remoteAddress".into(),
-                expression: ConstraintExpression::NotIn(vec!["10.0.0.0/8".into()]),
+                expression: ConstraintExpression::NotIn {
+                    values: vec!["10.0.0.0/8".into()]
+                },
+                ..default_constraint()
             }]),
             &super::default,
             None
@@ -803,11 +832,17 @@ mod tests {
             Some(vec![
                 Constraint {
                     context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec!["development".into()]),
+                    expression: ConstraintExpression::In {
+                        values: vec!["development".into()]
+                    },
+                    ..default_constraint()
                 },
                 Constraint {
                     context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec!["development".into()]),
+                    expression: ConstraintExpression::In {
+                        values: vec!["development".into()]
+                    },
+                    ..default_constraint()
                 },
             ]),
             &super::default,
@@ -817,11 +852,15 @@ mod tests {
             Some(vec![
                 Constraint {
                     context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec!["development".into()]),
+                    expression: ConstraintExpression::In {
+                        values: vec!["development".into()]
+                    },
+                    ..default_constraint()
                 },
                 Constraint {
                     context_name: "environment".into(),
-                    expression: ConstraintExpression::In(vec![]),
+                    expression: ConstraintExpression::In { values: vec![] },
+                    ..default_constraint()
                 }
             ]),
             &super::default,
