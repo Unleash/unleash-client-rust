@@ -42,7 +42,7 @@ pub struct Strategy {
     pub parameters: Option<HashMap<String, String>>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 pub struct Constraint {
     #[serde(rename = "contextName")]
     pub context_name: String,
@@ -55,10 +55,10 @@ pub struct Constraint {
     pub expression: ConstraintExpression,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(tag = "operator")]
 pub enum ConstraintExpression {
-    //. Dates
+    // Dates
     #[serde(rename = "DATE_AFTER")]
     DateAfter { value: DateTime<Utc> },
     #[serde(rename = "DATE_BEFORE")]
@@ -220,7 +220,12 @@ where
 #[cfg(test)]
 mod tests {
 
-    use super::{Features, Metrics, Registration};
+    use std::str::FromStr;
+
+    use chrono::{DateTime, FixedOffset};
+    use semver::Version;
+
+    use super::{Constraint, Features, Metrics, Registration};
 
     #[test]
     fn parse_reference_doc() -> Result<(), serde_json::Error> {
@@ -342,6 +347,7 @@ mod tests {
 
     #[test]
     fn test_parse_constraint() -> Result<(), serde_json::Error> {
+        use super::ConstraintExpression::*;
         let data = r#"[
           {
             "contextName": "appId",
@@ -378,12 +384,56 @@ mod tests {
             "operator": "SEMVER_EQ",
             "caseInsensitive": false,
             "inverted": false,
-            "value": "1.2.3"
+            "value": "1.2.3",
+            "values": []
           }
         ]"#;
-        let parsed: Vec<super::Constraint> = serde_json::from_str(data)?;
-        dbg!(parsed);
-        // assert_eq!(1, parsed.version);
+
+        let parsed: Vec<Constraint> = serde_json::from_str(data)?;
+
+        assert_eq!(
+            parsed,
+            vec![
+                Constraint {
+                    context_name: "appId".to_string(),
+                    case_insensitive: Some(false,),
+                    inverted: Some(false,),
+                    expression: In {
+                        values: vec!["app.known.name".to_string(),],
+                    },
+                },
+                Constraint {
+                    context_name: "currentTime".to_string(),
+                    case_insensitive: Some(false,),
+                    inverted: Some(false,),
+                    expression: DateAfter {
+                        value: DateTime::<FixedOffset>::parse_from_rfc3339("2025-07-17T23:59:00Z")
+                            .unwrap()
+                            .to_utc(),
+                    },
+                },
+                Constraint {
+                    context_name: "remoteAddress".to_string(),
+                    case_insensitive: Some(false,),
+                    inverted: Some(false,),
+                    expression: NumGTE { value: 3333 },
+                },
+                Constraint {
+                    context_name: "appId".to_string(),
+                    case_insensitive: Some(false,),
+                    inverted: Some(false,),
+                    expression: NumEq { value: 888 },
+                },
+                Constraint {
+                    context_name: "appId".to_string(),
+                    case_insensitive: Some(false,),
+                    inverted: Some(false,),
+                    expression: SemverEq {
+                        value: Version::from_str("1.2.3").unwrap(),
+                    },
+                },
+            ]
+        );
         Ok(())
     }
 
