@@ -1,5 +1,6 @@
 // Copyright 2020 Cognite AS
 //! <https://docs.getunleash.io/user_guide/activation_strategy>
+use core::fmt;
 use std::collections::hash_map::HashMap;
 use std::collections::hash_set::HashSet;
 use std::hash::BuildHasher;
@@ -315,10 +316,21 @@ pub fn hostname<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) 
     Box::new(move |_: &Context| -> bool { result })
 }
 
+fn lower_case_if<S: fmt::Display>(case_insensitive: bool) -> impl Fn(S) -> String {
+    move |s| {
+        if case_insensitive {
+            s.to_string().to_lowercase()
+        } else {
+            s.to_string()
+        }
+    }
+}
+
 /// returns true if the strategy should be delegated to, false to disable
 fn _compile_constraint_string<F, B>(
     expression: ConstraintExpression,
     apply_invert: B,
+    case_insensitive: bool,
     getter: F,
 ) -> Evaluate
 where
@@ -328,6 +340,7 @@ where
     match expression {
         ConstraintExpression::In { values } => {
             let as_set: HashSet<String> = values.iter().cloned().collect();
+
             Box::new(move |context: &Context| {
                 apply_invert(getter(context).map(|v| as_set.contains(v)).unwrap_or(false))
             })
@@ -347,26 +360,34 @@ where
             }
         }
         ConstraintExpression::StrContains { values } => {
-            let as_set: HashSet<String> = values.iter().cloned().collect();
-            Box::new(move |context: &Context| {
-                apply_invert(getter(context).map(|v| as_set.contains(v)).unwrap_or(false))
-            })
-        }
-        ConstraintExpression::StrStartsWith { values } => {
-            let as_vec: Vec<String> = values.iter().cloned().collect();
+            let as_set: HashSet<String> =
+                values.iter().map(lower_case_if(case_insensitive)).collect();
             Box::new(move |context: &Context| {
                 apply_invert(
                     getter(context)
+                        .map(lower_case_if(case_insensitive))
+                        .map(|v| as_set.contains(&v))
+                        .unwrap_or(false),
+                )
+            })
+        }
+        ConstraintExpression::StrStartsWith { values } => {
+            let as_vec: Vec<String> = values.iter().map(lower_case_if(case_insensitive)).collect();
+            Box::new(move |context: &Context| {
+                apply_invert(
+                    getter(context)
+                        .map(lower_case_if(case_insensitive))
                         .map(|v| as_vec.iter().any(|entry| v.starts_with(entry)))
                         .unwrap_or(false),
                 )
             })
         }
         ConstraintExpression::StrEndsWith { values } => {
-            let as_vec: Vec<String> = values.iter().cloned().collect();
+            let as_vec: Vec<String> = values.iter().map(lower_case_if(case_insensitive)).collect();
             Box::new(move |context: &Context| {
                 apply_invert(
                     getter(context)
+                        .map(lower_case_if(case_insensitive))
                         .map(|v| as_vec.iter().any(|entry| v.ends_with(entry)))
                         .unwrap_or(false),
                 )
@@ -470,6 +491,7 @@ fn _ip_to_vec(ips: &[String]) -> Vec<IpNet> {
 fn _compile_constraint_host<F, B>(
     expression: ConstraintExpression,
     apply_invert: B,
+    case_insensitive: bool,
     getter: F,
 ) -> Evaluate
 where
@@ -517,13 +539,14 @@ where
             }
         }
         ConstraintExpression::StrContains { values } => {
-            let as_set: HashSet<String> = values.iter().cloned().collect();
+            let as_set: HashSet<String> =
+                values.iter().map(lower_case_if(case_insensitive)).collect();
+
             Box::new(move |context: &Context| {
                 let result = getter(context)
-                    .map(|v| {
-                        let v = v.0.to_string();
-                        as_set.contains(&v)
-                    })
+                    .map(|v| v.0)
+                    .map(lower_case_if(case_insensitive))
+                    .map(|v| as_set.contains(&v))
                     .unwrap_or(false);
                 apply_invert(result)
             })
@@ -532,10 +555,9 @@ where
             let as_vec: Vec<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
                 let result = getter(context)
-                    .map(|v| {
-                        let v = v.0.to_string();
-                        as_vec.iter().any(|entry| v.starts_with(entry))
-                    })
+                    .map(|v| v.0)
+                    .map(lower_case_if(case_insensitive))
+                    .map(|v| as_vec.iter().any(|entry| v.starts_with(entry)))
                     .unwrap_or(false);
                 apply_invert(result)
             })
@@ -544,10 +566,9 @@ where
             let as_vec: Vec<String> = values.iter().cloned().collect();
             Box::new(move |context: &Context| {
                 let result = getter(context)
-                    .map(|v| {
-                        let v = v.0.to_string();
-                        as_vec.iter().any(|entry| v.ends_with(entry))
-                    })
+                    .map(|v| v.0)
+                    .map(lower_case_if(case_insensitive))
+                    .map(|v| as_vec.iter().any(|entry| v.ends_with(entry)))
                     .unwrap_or(false);
                 apply_invert(result)
             })
@@ -570,35 +591,54 @@ fn _compile_constraints(constraints: Vec<Constraint>) -> Vec<Evaluate> {
     constraints
         .into_iter()
         .map(|constraint| {
-            let (context_name, expression, inverted) = (
+            let (context_name, expression, inverted, case_insensitive) = (
                 constraint.context_name,
                 constraint.expression,
                 constraint.inverted,
+                constraint.case_insensitive.unwrap_or(false),
             );
             let apply_invert = _apply_invert(inverted);
 
             match context_name.as_str() {
-                "appName" => _compile_constraint_string(expression, apply_invert, |context| {
-                    Some(&context.app_name)
-                }),
-                "environment" => _compile_constraint_string(expression, apply_invert, |context| {
-                    Some(&context.environment)
-                }),
-                "remoteAddress" => _compile_constraint_host(expression, apply_invert, |context| {
-                    context.remote_address.as_ref()
-                }),
-                "sessionId" => _compile_constraint_string(expression, apply_invert, |context| {
-                    context.session_id.as_ref()
-                }),
-                "userId" => _compile_constraint_string(expression, apply_invert, |context| {
-                    context.user_id.as_ref()
-                }),
+                "appName" => _compile_constraint_string(
+                    expression,
+                    apply_invert,
+                    case_insensitive,
+                    |context| Some(&context.app_name),
+                ),
+                "environment" => _compile_constraint_string(
+                    expression,
+                    apply_invert,
+                    case_insensitive,
+                    |context| Some(&context.environment),
+                ),
+                "remoteAddress" => _compile_constraint_host(
+                    expression,
+                    apply_invert,
+                    case_insensitive,
+                    |context| context.remote_address.as_ref(),
+                ),
+                "sessionId" => _compile_constraint_string(
+                    expression,
+                    apply_invert,
+                    case_insensitive,
+                    |context| context.session_id.as_ref(),
+                ),
+                "userId" => _compile_constraint_string(
+                    expression,
+                    apply_invert,
+                    case_insensitive,
+                    |context| context.user_id.as_ref(),
+                ),
                 "currentTime" => _compile_constraint_date(expression, apply_invert, |context| {
                     context.current_time
                 }),
-                _ => _compile_constraint_string(expression, apply_invert, move |context| {
-                    context.properties.get(&context_name)
-                }),
+                _ => _compile_constraint_string(
+                    expression,
+                    apply_invert,
+                    case_insensitive,
+                    move |context| context.properties.get(&context_name),
+                ),
             }
         })
         .collect()
