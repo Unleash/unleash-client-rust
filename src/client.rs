@@ -17,7 +17,10 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration, ToggleMetrics};
+use crate::api::{
+    self, ConstraintExpression, Feature, Features, Metrics, MetricsBucket, Registration,
+    ToggleMetrics,
+};
 use crate::context::Context;
 use crate::http::{HttpClient, HTTP};
 use crate::strategy;
@@ -751,30 +754,45 @@ where
                 .get_json::<Features>(&endpoint, Some(self.interval))
                 .await
             {
-                Ok(features) => match self.memoize(features.features) {
-                    Ok(None) => {}
-                    Ok(Some(metrics)) => {
-                        if !self.disable_metric_submission {
-                            let mut metrics_uploaded = false;
-                            let res = self
-                                .http
-                                .post_json(&metrics_endpoint, metrics, Some(self.interval))
-                                .await;
-                            if let Ok(successful) = res {
-                                if successful {
-                                    metrics_uploaded = true;
-                                    debug!("poll: uploaded feature metrics")
+                Ok(features) => {
+                    // warn if features contain unknown or unparsable constraints
+                    let warnings: Vec<_> = features
+                        .features
+                        .iter()
+                        .flat_map(|f| f.strategies.iter().filter_map(move |s| Some((&f.name, &s.name, s.constraints.as_ref()?))))
+                        .flat_map(|(f_name, s_name, c)| c.iter().filter_map(move |c| matches!(&c.expression, ConstraintExpression::Unknown(..)).then_some((f_name, s_name, c))))
+                        .map(|(f_name, s_name, c)| format!("Unknown or invalid constraint expression {:?} detected in strategy '{}' in feature toggle '{}'", serde_json::to_string(&c.expression), s_name, f_name))
+                        .collect();
+
+                    for message in warnings {
+                        warn!("{message}");
+                    }
+
+                    match self.memoize(features.features) {
+                        Ok(None) => {}
+                        Ok(Some(metrics)) => {
+                            if !self.disable_metric_submission {
+                                let mut metrics_uploaded = false;
+                                let res = self
+                                    .http
+                                    .post_json(&metrics_endpoint, metrics, Some(self.interval))
+                                    .await;
+                                if let Ok(successful) = res {
+                                    if successful {
+                                        metrics_uploaded = true;
+                                        debug!("poll: uploaded feature metrics")
+                                    }
+                                }
+                                if !metrics_uploaded {
+                                    warn!("poll: error uploading feature metrics");
                                 }
                             }
-                            if !metrics_uploaded {
-                                warn!("poll: error uploading feature metrics");
-                            }
+                        }
+                        Err(err) => {
+                            warn!("poll: failed to memoize features: {err:?}");
                         }
                     }
-                    Err(err) => {
-                        warn!("poll: failed to memoize features: {err:?}");
-                    }
-                },
+                }
                 Err(err) => {
                     warn!("poll: failed to retrieve features: {err:?}");
                 }
