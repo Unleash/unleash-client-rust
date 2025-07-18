@@ -360,13 +360,12 @@ where
             }
         }
         ConstraintExpression::StrContains { values } => {
-            let as_set: HashSet<String> =
-                values.iter().map(lower_case_if(case_insensitive)).collect();
+            let as_vec: Vec<String> = values.iter().map(lower_case_if(case_insensitive)).collect();
             Box::new(move |context: &Context| {
                 apply_invert(
                     getter(context)
                         .map(lower_case_if(case_insensitive))
-                        .map(|v| as_set.contains(&v))
+                        .map(|v| as_vec.iter().any(|entry| v.contains(entry)))
                         .unwrap_or(false),
                 )
             })
@@ -686,10 +685,12 @@ fn _parse_ip(ip: &str) -> Result<IpNet, std::net::AddrParseError> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::hash_map::HashMap;
     use std::default::Default;
+    use std::{collections::hash_map::HashMap, str::FromStr};
 
+    use chrono::{DateTime, FixedOffset, TimeDelta, Utc};
     use maplit::hashmap;
+    use semver::Version;
 
     use crate::api::{Constraint, ConstraintExpression};
     use crate::context::{Context, IPAddress};
@@ -708,7 +709,7 @@ mod tests {
     }
 
     #[test]
-    fn test_constrain() {
+    fn test_constrain_general() {
         // Without constraints, things should just pass through
         let context = Context::default();
         assert!(super::constrain(None, &super::default, None)(&context));
@@ -718,7 +719,10 @@ mod tests {
         assert!(super::constrain(Some(vec![]), &super::default, None)(
             &context
         ));
+    }
 
+    #[test]
+    fn test_constrain_with_in_constraints() {
         // An empty constraint gets disabled
         let context = Context {
             environment: "development".into(),
@@ -784,6 +788,21 @@ mod tests {
             &super::default,
             None
         )(&context));
+
+        // inverted
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                expression: ConstraintExpression::In {
+                    values: vec!["development".into()]
+                },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
         // second place
         let context = Context {
             environment: "development".into(),
@@ -812,6 +831,20 @@ mod tests {
                 expression: ConstraintExpression::NotIn {
                     values: vec!["staging".into(), "development".into()]
                 },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // inverted
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                expression: ConstraintExpression::NotIn {
+                    values: vec!["staging".into(), "development".into()]
+                },
+                inverted: Some(true),
                 ..default_constraint()
             }]),
             &super::default,
@@ -912,6 +945,7 @@ mod tests {
             &super::default,
             None
         )(&context));
+
         assert!(!super::constrain(
             Some(vec![
                 Constraint {
@@ -927,6 +961,510 @@ mod tests {
                     ..default_constraint()
                 }
             ]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_constrain_with_date_constraints() {
+        // .currentTime defaults to now
+        let context = Context::default();
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                expression: ConstraintExpression::DateBefore {
+                    value: Utc::now() - TimeDelta::seconds(30)
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                expression: ConstraintExpression::DateAfter {
+                    value: Utc::now() - TimeDelta::seconds(30)
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // inverted
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                expression: ConstraintExpression::DateAfter {
+                    value: Utc::now() - TimeDelta::seconds(30)
+                },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        let context = Context {
+            current_time: DateTime::<FixedOffset>::parse_from_rfc3339("2024-07-18T17:18:25.844Z")
+                .unwrap()
+                .to_utc(),
+            ..Default::default()
+        };
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                expression: ConstraintExpression::DateBefore { value: Utc::now() },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // inverted
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                expression: ConstraintExpression::DateBefore { value: Utc::now() },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "currentTime".into(),
+                expression: ConstraintExpression::DateAfter { value: Utc::now() },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // date comparison only works for currentTime
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "environment".into(),
+                expression: ConstraintExpression::DateBefore { value: Utc::now() },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_constrain_with_semver_constraints() {
+        let context = Context {
+            properties: hashmap! {
+                "version".into() => "1.2.3-rc.2".into()
+            },
+            ..Default::default()
+        };
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverLT {
+                    value: Version::from_str("1.2.3").unwrap()
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverGT {
+                    value: Version::from_str("1.2.2").unwrap()
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "version".into(),
+                expression: ConstraintExpression::SemverEq {
+                    value: Version::from_str("1.2.3-rc.2").unwrap()
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        let context = Context {
+            properties: hashmap! {
+                "app_version".into() => "1.0.0-alpha.1".into()
+            },
+            ..Default::default()
+        };
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "app_version".into(),
+                expression: ConstraintExpression::SemverLT {
+                    value: Version::from_str("0.155.0").unwrap()
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // inverted
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "app_version".into(),
+                expression: ConstraintExpression::SemverLT {
+                    value: Version::from_str("0.155.0").unwrap()
+                },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "app_version".into(),
+                expression: ConstraintExpression::SemverGT {
+                    value: Version::from_str("1.0.0-beta.1").unwrap()
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // inverted
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "app_version".into(),
+                expression: ConstraintExpression::SemverGT {
+                    value: Version::from_str("1.0.0-beta.1").unwrap()
+                },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "app_version".into(),
+                expression: ConstraintExpression::SemverEq {
+                    value: Version::from_str("1.0.0-beta.10").unwrap()
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // inverted
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "app_version".into(),
+                expression: ConstraintExpression::SemverEq {
+                    value: Version::from_str("1.0.0-beta.10").unwrap()
+                },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_constrain_with_str_constraints() {
+        let context = Context {
+            app_name: "gondola".into(),
+            ..Default::default()
+        };
+
+        // contains
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrContains {
+                    values: vec!["ondo".into(), "gigabad".into()]
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrContains {
+                    values: vec!["Ondo".into(), "gigabad".into()]
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // inverted
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrContains {
+                    values: vec!["Ondo".into(), "gigabad".into()]
+                },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // case insensitive
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrContains {
+                    values: vec!["Ondo".into(), "gigabad".into()]
+                },
+                case_insensitive: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrStartsWith {
+                    values: vec!["and".into(), "gon".into()]
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrStartsWith {
+                    values: vec!["and".into(), "Gon".into()]
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // inverted
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrStartsWith {
+                    values: vec!["and".into(), "Gon".into()]
+                },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // case insensitive
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrStartsWith {
+                    values: vec!["and".into(), "Gon".into()]
+                },
+                case_insensitive: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrEndsWith {
+                    values: vec!["ola".into(), "oga".into()]
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrEndsWith {
+                    values: vec!["Ola".into(), "Oga".into()]
+                },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // inverted
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrEndsWith {
+                    values: vec!["Ola".into(), "Oga".into()]
+                },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // case insensitive
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "appName".into(),
+                expression: ConstraintExpression::StrEndsWith {
+                    values: vec!["Ola".into(), "Oga".into()]
+                },
+                case_insensitive: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+    }
+
+    #[test]
+    fn test_constrain_with_num_constraints() {
+        let context = Context {
+            properties: hashmap! {
+                "times".into() => "30".into()
+            },
+            ..Default::default()
+        };
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "times".into(),
+                expression: ConstraintExpression::NumEq { value: 30 },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "times".into(),
+                expression: ConstraintExpression::NumLT { value: 31 },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "times".into(),
+                expression: ConstraintExpression::NumLTE { value: 40 },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "times".into(),
+                expression: ConstraintExpression::NumGT { value: 29 },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "times".into(),
+                expression: ConstraintExpression::NumGTE { value: 30 },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // inverted
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "times".into(),
+                expression: ConstraintExpression::NumEq { value: 30 },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "times".into(),
+                expression: ConstraintExpression::NumLT { value: 31 },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "times".into(),
+                expression: ConstraintExpression::NumLTE { value: 40 },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "times".into(),
+                expression: ConstraintExpression::NumGT { value: 29 },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        assert!(!super::constrain(
+            Some(vec![Constraint {
+                context_name: "times".into(),
+                expression: ConstraintExpression::NumGTE { value: 30 },
+                inverted: Some(true),
+                ..default_constraint()
+            }]),
             &super::default,
             None
         )(&context));
