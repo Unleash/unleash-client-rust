@@ -351,11 +351,7 @@ where
             } else {
                 let as_set: HashSet<String> = values.iter().cloned().collect();
                 Box::new(move |context: &Context| {
-                    apply_invert(
-                        getter(context)
-                            .map(|v| !as_set.contains(v))
-                            .unwrap_or(false),
-                    )
+                    apply_invert(getter(context).map(|v| !as_set.contains(v)).unwrap_or(true))
                 })
             }
         }
@@ -394,35 +390,35 @@ where
         }
         ConstraintExpression::NumEq { value } => Box::new(move |context: &Context| {
             let result = getter(context)
-                .and_then(|v| str::parse::<usize>(v).ok())
+                .and_then(|v| str::parse::<f64>(v).ok())
                 .map(|v| v == value)
                 .unwrap_or(false);
             apply_invert(result)
         }),
         ConstraintExpression::NumGT { value } => Box::new(move |context: &Context| {
             let result = getter(context)
-                .and_then(|v| str::parse::<usize>(v).ok())
+                .and_then(|v| str::parse::<f64>(v).ok())
                 .map(|v| v > value)
                 .unwrap_or(false);
             apply_invert(result)
         }),
         ConstraintExpression::NumGTE { value } => Box::new(move |context: &Context| {
             let result = getter(context)
-                .and_then(|v| str::parse::<usize>(v).ok())
+                .and_then(|v| str::parse::<f64>(v).ok())
                 .map(|v| v >= value)
                 .unwrap_or(false);
             apply_invert(result)
         }),
         ConstraintExpression::NumLT { value } => Box::new(move |context: &Context| {
             let result = getter(context)
-                .and_then(|v| str::parse::<usize>(v).ok())
+                .and_then(|v| str::parse::<f64>(v).ok())
                 .map(|v| v < value)
                 .unwrap_or(false);
             apply_invert(result)
         }),
         ConstraintExpression::NumLTE { value } => Box::new(move |context: &Context| {
             let result = getter(context)
-                .and_then(|v| str::parse::<usize>(v).ok())
+                .and_then(|v| str::parse::<f64>(v).ok())
                 .map(|v| v <= value)
                 .unwrap_or(false);
             apply_invert(result)
@@ -636,7 +632,7 @@ fn _compile_constraints(constraints: Vec<Constraint>) -> Vec<Evaluate> {
                     expression,
                     apply_invert,
                     case_insensitive,
-                    move |context| context.properties.get(&context_name),
+                    move |context| context.get_property(&context_name),
                 ),
             }
         })
@@ -732,6 +728,20 @@ mod tests {
             Some(vec![Constraint {
                 context_name: "".into(),
                 expression: ConstraintExpression::In { values: vec![] },
+                ..default_constraint()
+            }]),
+            &super::default,
+            None
+        )(&context));
+
+        // A missing field in context for NotIn delegates
+        let context = Context::default();
+        assert!(super::constrain(
+            Some(vec![Constraint {
+                context_name: "customFieldMissing".into(),
+                expression: ConstraintExpression::NotIn {
+                    values: vec!["s1".into()]
+                },
                 ..default_constraint()
             }]),
             &super::default,
@@ -1063,7 +1073,7 @@ mod tests {
     fn test_constrain_with_semver_constraints() {
         let context = Context {
             properties: hashmap! {
-                "version".into() => "1.2.3-rc.2".into()
+                "version".into() => Some("1.2.3-rc.2".into())
             },
             ..Default::default()
         };
@@ -1105,7 +1115,7 @@ mod tests {
 
         let context = Context {
             properties: hashmap! {
-                "app_version".into() => "1.0.0-alpha.1".into()
+                "app_version".into() => Some("1.0.0-alpha.1".into())
             },
             ..Default::default()
         };
@@ -1358,7 +1368,7 @@ mod tests {
     fn test_constrain_with_num_constraints() {
         let context = Context {
             properties: hashmap! {
-                "times".into() => "30".into()
+                "times".into() => Some("30".into())
             },
             ..Default::default()
         };
@@ -1366,7 +1376,7 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "times".into(),
-                expression: ConstraintExpression::NumEq { value: 30 },
+                expression: ConstraintExpression::NumEq { value: 30.0 },
                 ..default_constraint()
             }]),
             &super::default,
@@ -1376,7 +1386,7 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "times".into(),
-                expression: ConstraintExpression::NumLT { value: 31 },
+                expression: ConstraintExpression::NumLT { value: 31.0 },
                 ..default_constraint()
             }]),
             &super::default,
@@ -1386,7 +1396,7 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "times".into(),
-                expression: ConstraintExpression::NumLTE { value: 40 },
+                expression: ConstraintExpression::NumLTE { value: 40.0 },
                 ..default_constraint()
             }]),
             &super::default,
@@ -1396,7 +1406,7 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "times".into(),
-                expression: ConstraintExpression::NumGT { value: 29 },
+                expression: ConstraintExpression::NumGT { value: 29.0 },
                 ..default_constraint()
             }]),
             &super::default,
@@ -1406,7 +1416,7 @@ mod tests {
         assert!(super::constrain(
             Some(vec![Constraint {
                 context_name: "times".into(),
-                expression: ConstraintExpression::NumGTE { value: 30 },
+                expression: ConstraintExpression::NumGTE { value: 30.0 },
                 ..default_constraint()
             }]),
             &super::default,
@@ -1417,7 +1427,7 @@ mod tests {
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "times".into(),
-                expression: ConstraintExpression::NumEq { value: 30 },
+                expression: ConstraintExpression::NumEq { value: 30.0 },
                 inverted: Some(true),
                 ..default_constraint()
             }]),
@@ -1428,7 +1438,7 @@ mod tests {
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "times".into(),
-                expression: ConstraintExpression::NumLT { value: 31 },
+                expression: ConstraintExpression::NumLT { value: 31.0 },
                 inverted: Some(true),
                 ..default_constraint()
             }]),
@@ -1439,7 +1449,7 @@ mod tests {
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "times".into(),
-                expression: ConstraintExpression::NumLTE { value: 40 },
+                expression: ConstraintExpression::NumLTE { value: 40.0 },
                 inverted: Some(true),
                 ..default_constraint()
             }]),
@@ -1450,7 +1460,7 @@ mod tests {
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "times".into(),
-                expression: ConstraintExpression::NumGT { value: 29 },
+                expression: ConstraintExpression::NumGT { value: 29.0 },
                 inverted: Some(true),
                 ..default_constraint()
             }]),
@@ -1461,7 +1471,7 @@ mod tests {
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "times".into(),
-                expression: ConstraintExpression::NumGTE { value: 30 },
+                expression: ConstraintExpression::NumGTE { value: 30.0 },
                 inverted: Some(true),
                 ..default_constraint()
             }]),
