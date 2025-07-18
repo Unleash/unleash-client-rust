@@ -7,6 +7,7 @@ use crate::version::get_sdk_version;
 use chrono::{DateTime, Utc};
 use semver::Version;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
@@ -74,27 +75,27 @@ pub enum ConstraintExpression {
     #[serde(rename = "NUM_EQ")]
     NumEq {
         #[serde(deserialize_with = "deserialize_number_from_string")]
-        value: usize,
+        value: f64,
     },
     #[serde(rename = "NUM_GT")]
     NumGT {
         #[serde(deserialize_with = "deserialize_number_from_string")]
-        value: usize,
+        value: f64,
     },
     #[serde(rename = "NUM_GTE")]
     NumGTE {
         #[serde(deserialize_with = "deserialize_number_from_string")]
-        value: usize,
+        value: f64,
     },
     #[serde(rename = "NUM_LT")]
     NumLT {
         #[serde(deserialize_with = "deserialize_number_from_string")]
-        value: usize,
+        value: f64,
     },
     #[serde(rename = "NUM_LTE")]
     NumLTE {
         #[serde(deserialize_with = "deserialize_number_from_string")]
-        value: usize,
+        value: f64,
     },
 
     // Semver
@@ -112,6 +113,9 @@ pub enum ConstraintExpression {
     StrStartsWith { values: Vec<String> },
     #[serde(rename = "STR_ENDS_WITH")]
     StrEndsWith { values: Vec<String> },
+
+    #[serde(untagged)]
+    Unknown(Value),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -416,13 +420,13 @@ mod tests {
                     context_name: "remoteAddress".to_string(),
                     case_insensitive: Some(false,),
                     inverted: Some(false,),
-                    expression: NumGTE { value: 3333 },
+                    expression: NumGTE { value: 3333.0 },
                 },
                 Constraint {
                     context_name: "appId".to_string(),
                     case_insensitive: Some(false,),
                     inverted: Some(false,),
-                    expression: NumEq { value: 888 },
+                    expression: NumEq { value: 888.0 },
                 },
                 Constraint {
                     context_name: "appId".to_string(),
