@@ -1,17 +1,83 @@
 [package]
+name = "unleash-api-client"
+version = "0.13.0"
 authors = ["Robert Collins <robert.collins@cognite.com>"]
+edition = "2024"
+rust-version = "1.88"
+description = "An API client for https://www.getunleash.io/"
+readme = "README.md"
+homepage = "https://github.com/Unleash/unleash-client-rust/"
+repository = "https://github.com/Unleash/unleash-client-rust/"
+license = "Apache-2.0"
+keywords = ["continualdeployment"]
 categories = ["api-bindings", "web-programming"]
 default-run = "dump-features"
-description = "An API client for https://www.getunleash.io/"
-edition = "2018"
-homepage = "https://github.com/Unleash/unleash-client-rust/"
-keywords = ["continualdeployment"]
-license = "Apache-2.0"
-name = "unleash-api-client"
-readme = "README.md"
-repository = "https://github.com/Unleash/unleash-client-rust/"
-rust-version = "1.60"
-version = "0.12.1"
+
+[lib]
+bench = false
+
+[[bin]]
+bench = false
+name = "dump-features"
+path = "src/bin/dump-features.rs"
+required-features = ["surf-client"]
+
+[[bench]]
+harness = false
+name = "is_enabled"
+
+[dependencies]
+anyhow = "1.0.44"
+arc-swap = "1.4.0"
+async-std = { version = "1.10.0", optional = true }
+async-trait = "0.1.56"
+cfg-if = "1.0.0"
+enum-map = "2.7.3"
+futures-timer = "3.0.2"
+hostname = "0.4.1"
+ipnet = "2.3.1"
+log = "0.4.14"
+murmur3 = "0.5.1"
+rand = "0.9.1"
+rustversion = "1.0.7"
+serde_json = "1.0.68"
+serde_plain = "1.0.0"
+surf = { version = "2.3.1", optional = true }
+uuid = { version = "1.11.0", features = ["v4"] }
+
+[dependencies.chrono]
+version = "0.4.19"
+default-features = false
+features = ["clock", "serde"]
+
+[dependencies.reqwest]
+version = "0.12"
+default-features = false
+features = ["json"]
+optional = true
+
+[dependencies.reqwest-11]
+version = "0.11"
+default-features = false
+features = ["json"]
+optional = true
+package = "reqwest"
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+
+[dev-dependencies]
+criterion = "0.6.0"  # Remember to update audit.toml
+futures = "0.3.17"
+maplit = "1.0.2"
+num_cpus = "1.13.0"
+regex = "1.9.6"
+simple_logger = "5.0.0"
+
+[dev-dependencies.tokio]
+version = "1.12.0"
+features = ["macros", "rt-multi-thread", "time"]
 
 [badges]
 [badges.maintenance]
@@ -35,68 +101,3 @@ strict = []
 # For use with --no-default-features
 surf-client = ["async-std", "surf"]
 
-[[bench]]
-harness = false
-name = "is_enabled"
-
-[[bin]]
-bench = false
-name = "dump-features"
-path = "src/bin/dump-features.rs"
-required-features = ["surf-client"]
-
-[dependencies]
-anyhow = "1.0.44"
-arc-swap = "1.4.0"
-async-std = { version = "1.10.0", optional = true }
-async-trait = "0.1.56"
-cfg-if = "1.0.0"
-enum-map = "~2.0.1"
-futures-timer = "3.0.2"
-hostname = "0.3.1"
-ipnet = "2.3.1"
-log = "0.4.14"
-murmur3 = "0.5.1"
-rand = "0.8.4"
-rustversion = "1.0.7"
-serde_json = "1.0.68"
-serde_plain = "1.0.0"
-surf = { version = "2.3.1", optional = true }
-uuid = { version = "1.11.0", features = ["v4"] }
-
-[dependencies.chrono]
-default-features = false
-features = ["clock", "serde"]
-version = "0.4.19"
-
-[dependencies.reqwest]
-default-features = false
-features = ["json"]
-optional = true
-version = "0.12"
-
-[dependencies.reqwest-11]
-default-features = false
-features = ["json"]
-optional = true
-package = "reqwest"
-version = "0.11"
-
-[dependencies.serde]
-features = ["derive"]
-version = "1.0"
-
-[dev-dependencies]
-criterion = "0.3.5"     # Remember to update audit.toml
-futures = "0.3.17"
-maplit = "1.0.2"
-num_cpus = "1.13.0"
-regex = "1.9.6"
-simple_logger = "2.1.0"
-
-[dev-dependencies.tokio]
-features = ["macros", "rt-multi-thread", "time"]
-version = "1.12.0"
-
-[lib]
-bench = false
