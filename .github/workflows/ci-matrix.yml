@@ -61,7 +61,7 @@ jobs:
           args: --features strict,reqwest-client,reqwest-client-rustls,reqwest-client-11,reqwest-client-11-rustls --all-targets
 
       - uses: actions-rs/cargo@v1
-        # We test with approximately all-features to ensure that that does build (excludes nightly only backtrace)
+        # We test with approximately all-features to ensure that that does build
         with:
           command: test
           args: --features strict,reqwest-client,reqwest-client-rustls,reqwest-client-11,reqwest-client-11-rustls --all-targets

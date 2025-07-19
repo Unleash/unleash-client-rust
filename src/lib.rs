@@ -112,8 +112,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
   Enables reqwest 0.11 with RusTLS support
 * **strict** -
   Turn unexpected fields in API responses into errors
-* **surf-client** -
-  Enables Surf as the HTTP client to retrieve flags
 */
 #![warn(clippy::all)]
 
