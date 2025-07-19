@@ -13,13 +13,13 @@ use enum_map::{EnumArray, EnumMap};
 use futures_timer::Delay;
 use log::{debug, trace, warn};
 use rand::Rng;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration, ToggleMetrics};
 use crate::context::Context;
-use crate::http::{HttpClient, HTTP};
+use crate::http::{HTTP, HttpClient};
 use crate::strategy;
 
 // ----------------- Variant
@@ -291,9 +291,7 @@ where
                     // Traces once per strategy (memo)
                     trace!(
                         "is_enabled: feature {:?} not enabled by memo {:p}, context {:?}",
-                        feature_enum,
-                        memo,
-                        context
+                        feature_enum, memo, context
                     );
                 }
             }
@@ -315,9 +313,7 @@ where
 
         trace!(
             "is_enabled: feature {:?} default {}, context {:?}",
-            feature_enum,
-            default,
-            context
+            feature_enum, default, context
         );
         let feature = &self.features[feature_enum.clone()];
         let default_context = &Default::default();
@@ -364,17 +360,14 @@ where
                     // Traces once per strategy (memo)
                     trace!(
                         "is_enabled: feature {} not enabled by memo {:p}, context {:?}",
-                        feature_name,
-                        memo,
-                        context
+                        feature_name, memo, context
                     );
                 }
             }
             if !feature.known {
                 trace!(
                     "is_enabled: Unknown feature {}, using default {}",
-                    feature_name,
-                    default
+                    feature_name, default
                 );
                 if default {
                     feature.enabled.fetch_add(1, Ordering::Relaxed);
@@ -486,8 +479,7 @@ where
     pub fn get_variant(&self, feature_enum: F, context: &Context) -> Variant {
         trace!(
             "get_variant: feature {:?} context {:?}",
-            feature_enum,
-            context
+            feature_enum, context
         );
         let cache = self.cached_state();
         let cache = match cache.as_ref() {
@@ -519,8 +511,7 @@ where
     pub fn get_variant_str(&self, feature_name: &str, context: &Context) -> Variant {
         trace!(
             "get_variant_Str: feature {} context {:?}",
-            feature_name,
-            context
+            feature_name, context
         );
         assert!(
             self.enable_str_features,
@@ -597,8 +588,8 @@ where
                 "get_variant: feature {:?} context has no identifiers, selecting randomly",
                 feature_name
             );
-            let mut rng = rand::thread_rng();
-            let picked = rng.gen_range(0..feature.variants.len());
+            let mut rng = rand::rng();
+            let picked = rng.random_range(0..feature.variants.len());
             feature.variants[picked]
                 .count
                 .fetch_add(1, Ordering::Relaxed);
@@ -634,9 +625,7 @@ where
     pub fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
         trace!(
             "is_enabled: feature {:?} default {}, context {:?}",
-            feature_enum,
-            default,
-            context
+            feature_enum, default, context
         );
         let cache = self.cached_state();
         let cache = match cache.as_ref() {
@@ -657,9 +646,7 @@ where
     ) -> bool {
         trace!(
             "is_enabled: feature_str {:?} default {}, context {:?}",
-            feature_name,
-            default,
-            context
+            feature_name, default, context
         );
         assert!(
             self.enable_str_features,

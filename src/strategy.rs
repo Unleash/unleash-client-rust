@@ -232,9 +232,9 @@ fn pick_random(pct: u8) -> bool {
         0 => false,
         100 => true,
         pct => {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             // generates 0's but not 100's.
-            let picked = rng.gen_range(0..100);
+            let picked = rng.random_range(0..100);
             pct > picked
         }
     }

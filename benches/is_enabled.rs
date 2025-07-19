@@ -11,11 +11,10 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use enum_map::Enum;
 use maplit::hashmap;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+use rand::{Rng, distr::Alphanumeric, rng};
 use serde::{Deserialize, Serialize};
 
 use unleash_api_client::api::{Feature, Features, Strategy};
@@ -209,7 +208,7 @@ where
 
 #[inline]
 fn random_str() -> String {
-    thread_rng()
+    rng()
         .sample_iter(&Alphanumeric)
         .take(30)
         .map(char::from)
