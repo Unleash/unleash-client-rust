@@ -347,7 +347,7 @@ fn _ip_to_vec(ips: &[String]) -> Vec<IpNet> {
         if let Ok(ip) = ip_parsed {
             result.push(ip);
         } else {
-            warn!("Could not parse IP address {:?}", ip_str);
+            warn!("Could not parse IP address {ip_str:?}");
         }
     }
     result
@@ -446,7 +446,7 @@ pub fn constrain<S: Fn(Option<HashMap<String, String>>) -> Evaluate + Sync + Sen
                 trace!("constrain: empty constraints list, bypassing");
                 compiled_strategy
             } else {
-                trace!("constrain: compiling constraints list {:?}", constraints);
+                trace!("constrain: compiling constraints list {constraints:?}");
                 let constraints = _compile_constraints(constraints);
                 // Create a closure that will evaluate against the context.
                 Box::new(move |context| {
