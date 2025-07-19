@@ -116,7 +116,6 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
   Enables Surf as the HTTP client to retrieve flags
 */
 #![warn(clippy::all)]
-#![cfg_attr(feature = "backtrace", feature(backtrace))]
 
 pub mod api;
 pub mod client;
