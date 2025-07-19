@@ -2,8 +2,8 @@
 name = "unleash-api-client"
 version = "0.13.0"
 authors = ["Robert Collins <robert.collins@cognite.com>"]
-edition = "2024"
-rust-version = "1.88"
+edition = "2021"
+rust-version = "1.74"
 description = "An API client for https://www.getunleash.io/"
 readme = "README.md"
 homepage = "https://github.com/Unleash/unleash-client-rust/"
