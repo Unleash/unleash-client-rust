@@ -20,7 +20,7 @@ bench = false
 bench = false
 name = "dump-features"
 path = "src/bin/dump-features.rs"
-required-features = ["surf-client"]
+required-features = ["reqwest-client"]
 
 [[bench]]
 harness = false
@@ -29,7 +29,6 @@ name = "is_enabled"
 [dependencies]
 anyhow = "1.0.44"
 arc-swap = "1.4.0"
-async-std = { version = "1.10.0", optional = true }
 async-trait = "0.1.56"
 cfg-if = "1.0.0"
 enum-map = "2.7.3"
@@ -42,7 +41,6 @@ rand = "0.9.1"
 rustversion = "1.0.7"
 serde_json = "1.0.68"
 serde_plain = "1.0.0"
-surf = { version = "2.3.1", optional = true }
 uuid = { version = "1.11.0", features = ["v4"] }
 
 [dependencies.chrono]
@@ -98,6 +96,4 @@ reqwest-client-11-rustls = ["reqwest-11", "reqwest-11?/rustls-tls"]
 reqwest-client-rustls = ["reqwest", "reqwest?/rustls-tls"]
 # To error if an unsupported API feature is present
 strict = []
-# For use with --no-default-features
-surf-client = ["async-std", "surf"]
 

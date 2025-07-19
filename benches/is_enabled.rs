@@ -217,9 +217,7 @@ fn random_str() -> String {
 
 fn batch(c: &mut Criterion) {
     cfg_if::cfg_if! {
-        if #[cfg(feature = "surf")] {
-            use surf::Client as HttpClient;
-        } else if #[cfg(feature = "reqwest")] {
+        if #[cfg(feature = "reqwest")] {
             use reqwest::Client as HttpClient;
         } else if #[cfg(feature = "reqwest-11")] {
             use reqwest_11::Client as HttpClient;
@@ -420,9 +418,7 @@ fn single_call(c: &mut Criterion) {
         .with_level(log::LevelFilter::Warn)
         .init();
     cfg_if::cfg_if! {
-        if #[cfg(feature = "surf")] {
-            use surf::Client as HttpClient;
-        } else if #[cfg(feature = "reqwest")] {
+        if #[cfg(feature = "reqwest")] {
             use reqwest::Client as HttpClient;
         } else if #[cfg(feature = "reqwest-11")] {
             use reqwest_11::Client as HttpClient;

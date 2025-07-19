@@ -88,9 +88,7 @@ mod tests {
     fn test_client_specification() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
     {
         cfg_if::cfg_if! {
-            if #[cfg(feature = "surf")] {
-                use surf::Client as HttpClient;
-            } else if #[cfg(feature = "reqwest")] {
+            if #[cfg(feature = "reqwest")] {
                 use reqwest::Client as HttpClient;
             } else if #[cfg(feature = "reqwest-11")] {
                 use reqwest_11::Client as HttpClient;

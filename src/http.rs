@@ -6,8 +6,6 @@ mod reqwest;
 #[cfg(feature = "reqwest-11")]
 mod reqwest_11;
 mod shim;
-#[cfg(feature = "surf")]
-mod surf;
 
 pub struct HTTP<C: HttpClient> {
     authorization_header: C::HeaderName,
@@ -29,7 +27,7 @@ pub struct HTTP<C: HttpClient> {
 }
 
 use crate::version::get_sdk_version;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 #[doc(inline)]
 pub use shim::HttpClient;
 

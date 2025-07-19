@@ -9,7 +9,6 @@
 #[cfg(feature = "functional")]
 mod tests {
     use std::sync::Arc;
-    use std::thread;
     use std::time::Duration;
     use std::{future::Future, pin::Pin};
 
@@ -20,9 +19,6 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use unleash_api_client::{client, config::EnvironmentConfig, http::HttpClient};
-
-    #[cfg(not(any(feature = "surf", feature = "reqwest")))]
-    compile_error!("Cannot run test suite without a client enabled");
 
     #[allow(non_camel_case_types)]
     #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
@@ -38,24 +34,6 @@ mod tests {
             F: Future<Output = ()> + Send + 'static;
 
         async fn sleep(d: Duration);
-    }
-
-    #[cfg(feature = "surf")]
-    struct AsyncStdAsync;
-    #[cfg(feature = "surf")]
-    #[async_trait]
-    impl AsyncImpl for AsyncStdAsync {
-        type JoinHandle = task::JoinHandle<()>;
-        fn spawn<F>(f: F) -> Self::JoinHandle
-        where
-            F: Future<Output = ()> + Send + 'static,
-        {
-            task::spawn(f)
-        }
-
-        async fn sleep(d: Duration) {
-            thread::sleep(d)
-        }
     }
 
     #[cfg(any(feature = "reqwest", feature = "reqwest-11"))]
@@ -129,14 +107,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "surf")]
-    #[test]
-    fn test_smoke_async_surf() {
-        task::block_on(async {
-            test_smoke_async::<surf::Client>().await.unwrap();
-        });
-    }
-
     #[cfg(feature = "reqwest")]
     #[tokio::test]
     async fn test_smoke_async_reqwest() {
@@ -190,16 +160,6 @@ mod tests {
         handler.await;
         println!("got metrics");
         Ok(())
-    }
-
-    #[cfg(feature = "surf")]
-    #[test]
-    fn test_smoke_threaded_surf() {
-        task::block_on(async {
-            test_smoke_threaded::<surf::Client, AsyncStdAsync>()
-                .await
-                .unwrap();
-        });
     }
 
     #[cfg(feature = "reqwest")]
