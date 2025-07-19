@@ -58,7 +58,7 @@ mod tests {
         }
     }
 
-    #[cfg(or(feature = "reqwest", feature = "reqwest-11"))]
+    #[cfg(any(feature = "reqwest", feature = "reqwest-11"))]
     struct TokioJoinHandle {
         inner: tokio::task::JoinHandle<()>,
     }
@@ -80,9 +80,9 @@ mod tests {
         }
     }
 
-    #[cfg(or(feature = "reqwest", feature = "reqwest-11"))]
+    #[cfg(any(feature = "reqwest", feature = "reqwest-11"))]
     struct TokioAsync;
-    #[cfg(or(feature = "reqwest", feature = "reqwest-11"))]
+    #[cfg(any(feature = "reqwest", feature = "reqwest-11"))]
     #[async_trait]
     impl AsyncImpl for TokioAsync {
         type JoinHandle = TokioJoinHandle;
@@ -142,14 +142,14 @@ mod tests {
     async fn test_smoke_async_reqwest() {
         test_smoke_async::<reqwest::Client>().await.unwrap();
     }
-    #[cfg(feature = "reqwest-11")]
+    #[cfg(all(feature = "reqwest-11", not(feature = "reqwest")))]
     #[tokio::test]
     async fn test_smoke_async_reqwest() {
         test_smoke_async::<reqwest_11::Client>().await.unwrap();
     }
 
-    async fn test_smoke_threaded<C, A>(
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
+    async fn test_smoke_threaded<C, A>()
+    -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
     where
         C: HttpClient + Default + 'static,
         A: AsyncImpl,
@@ -184,7 +184,7 @@ mod tests {
         A::sleep(Duration::from_millis(500)).await;
         assert!(client.is_enabled(UserFeatures::default, None, false));
         // Ensure the metrics get up-loaded
-        A::sleep(Duration::from_millis(500));
+        A::sleep(Duration::from_millis(500)).await;
         client.stop_poll().await;
 
         handler.await;
@@ -209,7 +209,7 @@ mod tests {
             .await
             .unwrap();
     }
-    #[cfg(feature = "reqwest-11")]
+    #[cfg(all(feature = "reqwest-11", not(feature = "reqwest")))]
     #[tokio::test]
     async fn test_smoke_threaded_reqwest() {
         test_smoke_threaded::<reqwest_11::Client, TokioAsync>()
