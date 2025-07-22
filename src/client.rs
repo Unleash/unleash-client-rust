@@ -13,13 +13,13 @@ use enum_map::{EnumArray, EnumMap};
 use futures_timer::Delay;
 use log::{debug, trace, warn};
 use rand::Rng;
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use uuid::Uuid;
 
 use crate::api::{self, Feature, Features, Metrics, MetricsBucket, Registration, ToggleMetrics};
 use crate::context::Context;
-use crate::http::{HTTP, HttpClient};
+use crate::http::{HttpClient, HTTP};
 use crate::strategy;
 
 // ----------------- Variant

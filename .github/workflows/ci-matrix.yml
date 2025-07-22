@@ -12,7 +12,6 @@ jobs:
           - nightly
         features:
           # no need for reqwest-client-rustls, it changes only internals of reqwest
-          - async-std
           - reqwest-client
           - reqwest-client-11
 

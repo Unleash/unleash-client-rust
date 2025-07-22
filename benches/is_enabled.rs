@@ -11,10 +11,10 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use enum_map::Enum;
 use maplit::hashmap;
-use rand::{Rng, distr::Alphanumeric, rng};
+use rand::{distr::Alphanumeric, rng, Rng};
 use serde::{Deserialize, Serialize};
 
 use unleash_api_client::api::{Feature, Features, Strategy};

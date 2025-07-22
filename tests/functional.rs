@@ -118,8 +118,8 @@ mod tests {
         test_smoke_async::<reqwest_11::Client>().await.unwrap();
     }
 
-    async fn test_smoke_threaded<C, A>()
-    -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
+    async fn test_smoke_threaded<C, A>(
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
     where
         C: HttpClient + Default + 'static,
         A: AsyncImpl,

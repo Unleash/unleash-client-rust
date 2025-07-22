@@ -27,7 +27,7 @@ pub struct HTTP<C: HttpClient> {
 }
 
 use crate::version::get_sdk_version;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 #[doc(inline)]
 pub use shim::HttpClient;
 
