@@ -113,7 +113,7 @@ mod tests {
         let index = fs::read(spec_dir.join("index.json"))?;
         let suite_names: Vec<String> = serde_json::from_slice(&index)?;
         for suite_name in suite_names {
-            log::info!("Running suite {}", suite_name);
+            log::info!("Running suite {suite_name}");
             let suite_content = fs::read(spec_dir.join(suite_name))?;
             let suite: Suite = serde_json::from_slice(&suite_content)?;
 
