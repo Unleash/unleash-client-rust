@@ -1,11 +1,10 @@
 // Copyright 2020 Cognite AS
 //! <https://docs.getunleash.io/user_guide/activation_strategy>
-use core::fmt;
-use std::collections::hash_map::HashMap;
-use std::collections::hash_set::HashSet;
 use std::hash::BuildHasher;
 use std::io::Cursor;
 use std::net::IpAddr;
+use std::{collections::hash_map::HashMap, str::FromStr};
+use std::{collections::hash_set::HashSet, fmt::Display};
 
 use chrono::{DateTime, Utc};
 use ipnet::IpNet;
@@ -316,7 +315,7 @@ pub fn hostname<S: BuildHasher>(parameters: Option<HashMap<String, String, S>>) 
     Box::new(move |_: &Context| -> bool { result })
 }
 
-fn lower_case_if<S: fmt::Display>(case_insensitive: bool) -> impl Fn(S) -> String {
+fn lower_case_if<S: Display>(case_insensitive: bool) -> impl Fn(S) -> String {
     move |s| {
         if case_insensitive {
             s.to_string().to_lowercase()
@@ -324,6 +323,40 @@ fn lower_case_if<S: fmt::Display>(case_insensitive: bool) -> impl Fn(S) -> Strin
             s.to_string()
         }
     }
+}
+
+fn handle_parsable_op<T, C, F>(getter: F, compare_fn: C) -> Evaluate
+where
+    T: FromStr,
+    C: Fn(T) -> bool + Clone + Sync + Send + 'static,
+    F: Fn(&Context) -> Option<&String> + Clone + Sync + Send + 'static,
+{
+    Box::new(move |context: &Context| {
+        getter(context)
+            .and_then(|v| v.parse::<T>().ok())
+            .map(&compare_fn)
+            .unwrap_or(false)
+    })
+}
+
+fn handle_str_op<T, C, F>(
+    values: Vec<String>,
+    getter: F,
+    case_insensitive: bool,
+    compare_fn: C,
+) -> Evaluate
+where
+    T: Display,
+    C: Fn(&String, &String) -> bool + Clone + Sync + Send + 'static,
+    F: Fn(&Context) -> Option<&T> + Clone + Sync + Send + 'static,
+{
+    let as_vec: Vec<String> = values.iter().map(lower_case_if(case_insensitive)).collect();
+    Box::new(move |context: &Context| {
+        getter(context)
+            .map(lower_case_if(case_insensitive))
+            .map(|v| as_vec.iter().any(|entry| compare_fn(&v, entry)))
+            .unwrap_or(false)
+    })
 }
 
 /// returns true if the strategy should be delegated to, false to disable
@@ -356,80 +389,44 @@ where
             }
         }
         ConstraintExpression::StrContains { values } => {
-            let as_vec: Vec<String> = values.iter().map(lower_case_if(case_insensitive)).collect();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .map(lower_case_if(case_insensitive))
-                    .map(|v| as_vec.iter().any(|entry| v.contains(entry)))
-                    .unwrap_or(false)
+            handle_str_op(values, getter, case_insensitive, |v, entry| {
+                v.contains(entry)
             })
         }
         ConstraintExpression::StrStartsWith { values } => {
-            let as_vec: Vec<String> = values.iter().map(lower_case_if(case_insensitive)).collect();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .map(lower_case_if(case_insensitive))
-                    .map(|v| as_vec.iter().any(|entry| v.starts_with(entry)))
-                    .unwrap_or(false)
+            handle_str_op(values, getter, case_insensitive, |v, entry| {
+                v.starts_with(entry)
             })
         }
         ConstraintExpression::StrEndsWith { values } => {
-            let as_vec: Vec<String> = values.iter().map(lower_case_if(case_insensitive)).collect();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .map(lower_case_if(case_insensitive))
-                    .map(|v| as_vec.iter().any(|entry| v.ends_with(entry)))
-                    .unwrap_or(false)
+            handle_str_op(values, getter, case_insensitive, |v, entry| {
+                v.ends_with(entry)
             })
         }
-        ConstraintExpression::NumEq { value } => Box::new(move |context: &Context| {
-            getter(context)
-                .and_then(|v| str::parse::<f64>(v).ok())
-                .map(|v| v == value)
-                .unwrap_or(false)
-        }),
-        ConstraintExpression::NumGT { value } => Box::new(move |context: &Context| {
-            getter(context)
-                .and_then(|v| str::parse::<f64>(v).ok())
-                .map(|v| v > value)
-                .unwrap_or(false)
-        }),
-        ConstraintExpression::NumGTE { value } => Box::new(move |context: &Context| {
-            getter(context)
-                .and_then(|v| str::parse::<f64>(v).ok())
-                .map(|v| v >= value)
-                .unwrap_or(false)
-        }),
-        ConstraintExpression::NumLT { value } => Box::new(move |context: &Context| {
-            getter(context)
-                .and_then(|v| str::parse::<f64>(v).ok())
-                .map(|v| v < value)
-                .unwrap_or(false)
-        }),
-        ConstraintExpression::NumLTE { value } => Box::new(move |context: &Context| {
-            getter(context)
-                .and_then(|v| str::parse::<f64>(v).ok())
-                .map(|v| v <= value)
-                .unwrap_or(false)
-        }),
-        ConstraintExpression::SemverEq { value } => Box::new(move |context: &Context| {
-            getter(context)
-                .and_then(|ctx| Version::parse(ctx).ok())
-                .map(|v| v == value)
-                .unwrap_or(false)
-        }),
-        ConstraintExpression::SemverGT { value } => Box::new(move |context: &Context| {
-            getter(context)
-                .and_then(|ctx| Version::parse(ctx).ok())
-                .map(|v| v > value)
-                .unwrap_or(false)
-        }),
-        ConstraintExpression::SemverLT { value } => Box::new(move |context: &Context| {
-            getter(context)
-                .and_then(|ctx| Version::parse(ctx).ok())
-                .map(|v| v < value)
-                .unwrap_or(false)
-        }),
+        ConstraintExpression::NumEq { value } => {
+            handle_parsable_op(getter, move |v: f64| v == value)
+        }
+        ConstraintExpression::NumGT { value } => {
+            handle_parsable_op(getter, move |v: f64| v > value)
+        }
+        ConstraintExpression::NumGTE { value } => {
+            handle_parsable_op(getter, move |v: f64| v >= value)
+        }
+        ConstraintExpression::NumLT { value } => {
+            handle_parsable_op(getter, move |v: f64| v < value)
+        }
+        ConstraintExpression::NumLTE { value } => {
+            handle_parsable_op(getter, move |v: f64| v <= value)
+        }
+        ConstraintExpression::SemverEq { value } => {
+            handle_parsable_op(getter, move |v: Version| v == value)
+        }
+        ConstraintExpression::SemverGT { value } => {
+            handle_parsable_op(getter, move |v: Version| v > value)
+        }
+        ConstraintExpression::SemverLT { value } => {
+            handle_parsable_op(getter, move |v: Version| v < value)
+        }
         _ => Box::new(|_| false),
     };
 
@@ -482,9 +479,9 @@ where
     F: Fn(&Context) -> Option<&crate::context::IPAddress> + Clone + Sync + Send + 'static,
     B: Fn(bool) -> bool + Sync + Send + Clone + 'static,
 {
-    let compiled_fn: Box<dyn Evaluator + Send + Sync + 'static> = match &expression {
+    let compiled_fn: Box<dyn Evaluator + Send + Sync + 'static> = match expression {
         ConstraintExpression::In { values } => {
-            let ips = _ip_to_vec(values);
+            let ips = _ip_to_vec(&values[..]);
             Box::new(move |context: &Context| {
                 getter(context)
                     .map(|remote_address| {
@@ -502,7 +499,7 @@ where
             if values.is_empty() {
                 Box::new(|_| false)
             } else {
-                let ips = _ip_to_vec(values);
+                let ips = _ip_to_vec(&values[..]);
                 Box::new(move |context: &Context| {
                     getter(context)
                         .map(|remote_address| {
@@ -516,42 +513,28 @@ where
                             }
                             true
                         })
-                        .unwrap_or(false)
+                        .unwrap_or(true)
                 })
             }
         }
-        ConstraintExpression::StrContains { values } => {
-            let as_set: HashSet<String> =
-                values.iter().map(lower_case_if(case_insensitive)).collect();
-
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .map(|v| v.0)
-                    .map(lower_case_if(case_insensitive))
-                    .map(|v| as_set.contains(&v))
-                    .unwrap_or(false)
-            })
-        }
-        ConstraintExpression::StrStartsWith { values } => {
-            let as_vec: Vec<String> = values.to_vec();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .map(|v| v.0)
-                    .map(lower_case_if(case_insensitive))
-                    .map(|v| as_vec.iter().any(|entry| v.starts_with(entry)))
-                    .unwrap_or(false)
-            })
-        }
-        ConstraintExpression::StrEndsWith { values } => {
-            let as_vec: Vec<String> = values.to_vec();
-            Box::new(move |context: &Context| {
-                getter(context)
-                    .map(|v| v.0)
-                    .map(lower_case_if(case_insensitive))
-                    .map(|v| as_vec.iter().any(|entry| v.ends_with(entry)))
-                    .unwrap_or(false)
-            })
-        }
+        ConstraintExpression::StrContains { values } => handle_str_op(
+            values,
+            move |ctx: &Context| getter(ctx).map(|v| &v.0),
+            case_insensitive,
+            |v, entry| v.contains(entry),
+        ),
+        ConstraintExpression::StrStartsWith { values } => handle_str_op(
+            values,
+            move |ctx: &Context| getter(ctx).map(|v| &v.0),
+            case_insensitive,
+            |v, entry| v.starts_with(entry),
+        ),
+        ConstraintExpression::StrEndsWith { values } => handle_str_op(
+            values,
+            move |ctx: &Context| getter(ctx).map(|v| &v.0),
+            case_insensitive,
+            |v, entry| v.ends_with(entry),
+        ),
         _ => Box::new(|_| false),
     };
     Box::new(move |context: &Context| apply_invert(compiled_fn(context)))
