@@ -547,7 +547,7 @@ where
             })
         }
         ConstraintExpression::StrStartsWith { values } => {
-            let as_vec: Vec<String> = values.iter().cloned().collect();
+            let as_vec: Vec<String> = values.to_vec();
             Box::new(move |context: &Context| {
                 let result = getter(context)
                     .map(|v| v.0)
@@ -558,7 +558,7 @@ where
             })
         }
         ConstraintExpression::StrEndsWith { values } => {
-            let as_vec: Vec<String> = values.iter().cloned().collect();
+            let as_vec: Vec<String> = values.to_vec();
             Box::new(move |context: &Context| {
                 let result = getter(context)
                     .map(|v| v.0)
