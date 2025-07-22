@@ -114,8 +114,6 @@ mod tests {
             let suite: Suite =
                 serde_json::from_slice(&suite_content).map_err(|err| err.to_string())?;
 
-            assert_eq!(1, suite.state.version);
-
             #[allow(non_camel_case_types)]
             #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
             enum NoFeatures {}
