@@ -29,12 +29,12 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --no-default-features --features strict,${{ matrix.features }}
+          args: --no-default-features --features async-std,strict,${{ matrix.features }}
 
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --no-default-features --features strict,${{ matrix.features }}
+          args: --no-default-features --features async-std,strict,${{ matrix.features }}
 
   clippy:
     runs-on: ubuntu-latest
