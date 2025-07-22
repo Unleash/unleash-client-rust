@@ -1,4 +1,4 @@
 [submodule "client-specification"]
 	path = client-specification
-	url = https://github.com/ikezedev/client-specification
-	branch = ike/rust-client-update
+	url = https://github.com/Unleash/client-specification
+	branch = client-spec-rust-sdk

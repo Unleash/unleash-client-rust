@@ -337,12 +337,12 @@ where
     F: Fn(&Context) -> Option<&String> + Clone + Sync + Send + 'static,
     B: Fn(bool) -> bool + Sync + Send + Clone + 'static,
 {
-    match expression {
+    let compiled_fn: Box<dyn Evaluator + Send + Sync + 'static> = match expression {
         ConstraintExpression::In { values } => {
             let as_set: HashSet<String> = values.iter().cloned().collect();
 
             Box::new(move |context: &Context| {
-                apply_invert(getter(context).map(|v| as_set.contains(v)).unwrap_or(false))
+                getter(context).map(|v| as_set.contains(v)).unwrap_or(false)
             })
         }
         ConstraintExpression::NotIn { values } => {
@@ -351,101 +351,89 @@ where
             } else {
                 let as_set: HashSet<String> = values.iter().cloned().collect();
                 Box::new(move |context: &Context| {
-                    apply_invert(getter(context).map(|v| !as_set.contains(v)).unwrap_or(true))
+                    getter(context).map(|v| !as_set.contains(v)).unwrap_or(true)
                 })
             }
         }
         ConstraintExpression::StrContains { values } => {
             let as_vec: Vec<String> = values.iter().map(lower_case_if(case_insensitive)).collect();
             Box::new(move |context: &Context| {
-                apply_invert(
-                    getter(context)
-                        .map(lower_case_if(case_insensitive))
-                        .map(|v| as_vec.iter().any(|entry| v.contains(entry)))
-                        .unwrap_or(false),
-                )
+                getter(context)
+                    .map(lower_case_if(case_insensitive))
+                    .map(|v| as_vec.iter().any(|entry| v.contains(entry)))
+                    .unwrap_or(false)
             })
         }
         ConstraintExpression::StrStartsWith { values } => {
             let as_vec: Vec<String> = values.iter().map(lower_case_if(case_insensitive)).collect();
             Box::new(move |context: &Context| {
-                apply_invert(
-                    getter(context)
-                        .map(lower_case_if(case_insensitive))
-                        .map(|v| as_vec.iter().any(|entry| v.starts_with(entry)))
-                        .unwrap_or(false),
-                )
+                getter(context)
+                    .map(lower_case_if(case_insensitive))
+                    .map(|v| as_vec.iter().any(|entry| v.starts_with(entry)))
+                    .unwrap_or(false)
             })
         }
         ConstraintExpression::StrEndsWith { values } => {
             let as_vec: Vec<String> = values.iter().map(lower_case_if(case_insensitive)).collect();
             Box::new(move |context: &Context| {
-                apply_invert(
-                    getter(context)
-                        .map(lower_case_if(case_insensitive))
-                        .map(|v| as_vec.iter().any(|entry| v.ends_with(entry)))
-                        .unwrap_or(false),
-                )
+                getter(context)
+                    .map(lower_case_if(case_insensitive))
+                    .map(|v| as_vec.iter().any(|entry| v.ends_with(entry)))
+                    .unwrap_or(false)
             })
         }
         ConstraintExpression::NumEq { value } => Box::new(move |context: &Context| {
-            let result = getter(context)
+            getter(context)
                 .and_then(|v| str::parse::<f64>(v).ok())
                 .map(|v| v == value)
-                .unwrap_or(false);
-            apply_invert(result)
+                .unwrap_or(false)
         }),
         ConstraintExpression::NumGT { value } => Box::new(move |context: &Context| {
-            let result = getter(context)
+            getter(context)
                 .and_then(|v| str::parse::<f64>(v).ok())
                 .map(|v| v > value)
-                .unwrap_or(false);
-            apply_invert(result)
+                .unwrap_or(false)
         }),
         ConstraintExpression::NumGTE { value } => Box::new(move |context: &Context| {
-            let result = getter(context)
+            getter(context)
                 .and_then(|v| str::parse::<f64>(v).ok())
                 .map(|v| v >= value)
-                .unwrap_or(false);
-            apply_invert(result)
+                .unwrap_or(false)
         }),
         ConstraintExpression::NumLT { value } => Box::new(move |context: &Context| {
-            let result = getter(context)
+            getter(context)
                 .and_then(|v| str::parse::<f64>(v).ok())
                 .map(|v| v < value)
-                .unwrap_or(false);
-            apply_invert(result)
+                .unwrap_or(false)
         }),
         ConstraintExpression::NumLTE { value } => Box::new(move |context: &Context| {
-            let result = getter(context)
+            getter(context)
                 .and_then(|v| str::parse::<f64>(v).ok())
                 .map(|v| v <= value)
-                .unwrap_or(false);
-            apply_invert(result)
+                .unwrap_or(false)
         }),
         ConstraintExpression::SemverEq { value } => Box::new(move |context: &Context| {
-            let result = getter(context)
+            getter(context)
                 .and_then(|ctx| Version::parse(ctx).ok())
                 .map(|v| v == value)
-                .unwrap_or(false);
-            apply_invert(result)
+                .unwrap_or(false)
         }),
         ConstraintExpression::SemverGT { value } => Box::new(move |context: &Context| {
-            let result = getter(context)
+            getter(context)
                 .and_then(|ctx| Version::parse(ctx).ok())
                 .map(|v| v > value)
-                .unwrap_or(false);
-            apply_invert(result)
+                .unwrap_or(false)
         }),
         ConstraintExpression::SemverLT { value } => Box::new(move |context: &Context| {
-            let result = getter(context)
+            getter(context)
                 .and_then(|ctx| Version::parse(ctx).ok())
                 .map(|v| v < value)
-                .unwrap_or(false);
-            apply_invert(result)
+                .unwrap_or(false)
         }),
         _ => Box::new(|_| false),
-    }
+    };
+
+    Box::new(move |context: &Context| apply_invert(compiled_fn(context)))
 }
 
 /// returns true if the strategy should be delegated to, false to disable
@@ -455,18 +443,19 @@ fn _compile_constraint_date<F, B>(
     getter: F,
 ) -> Evaluate
 where
-    F: Fn(&Context) -> DateTime<Utc> + Clone + Sync + Send + 'static,
+    F: Fn(&Context) -> Option<&DateTime<Utc>> + Clone + Sync + Send + 'static,
     B: Fn(bool) -> bool + Sync + Send + Clone + 'static,
 {
-    match expression {
+    let compiled_fn: Box<dyn Evaluator + Send + Sync + 'static> = match expression {
         ConstraintExpression::DateAfter { value } => {
-            Box::new(move |context: &Context| apply_invert(getter(context) > value))
+            Box::new(move |context: &Context| getter(context).map(|v| *v > value).unwrap_or(false))
         }
         ConstraintExpression::DateBefore { value } => {
-            Box::new(move |context: &Context| apply_invert(getter(context) < value))
+            Box::new(move |context: &Context| getter(context).map(|v| *v < value).unwrap_or(false))
         }
         _ => Box::new(|_| false),
-    }
+    };
+    Box::new(move |context: &Context| apply_invert(compiled_fn(context)))
 }
 
 fn _ip_to_vec(ips: &[String]) -> Vec<IpNet> {
@@ -493,11 +482,11 @@ where
     F: Fn(&Context) -> Option<&crate::context::IPAddress> + Clone + Sync + Send + 'static,
     B: Fn(bool) -> bool + Sync + Send + Clone + 'static,
 {
-    match &expression {
+    let compiled_fn: Box<dyn Evaluator + Send + Sync + 'static> = match &expression {
         ConstraintExpression::In { values } => {
             let ips = _ip_to_vec(values);
             Box::new(move |context: &Context| {
-                let result = getter(context)
+                getter(context)
                     .map(|remote_address| {
                         for ip in &ips {
                             if ip.contains(&remote_address.0) {
@@ -506,8 +495,7 @@ where
                         }
                         false
                     })
-                    .unwrap_or(false);
-                apply_invert(result)
+                    .unwrap_or(false)
             })
         }
         ConstraintExpression::NotIn { values } => {
@@ -516,7 +504,7 @@ where
             } else {
                 let ips = _ip_to_vec(values);
                 Box::new(move |context: &Context| {
-                    let result = getter(context)
+                    getter(context)
                         .map(|remote_address| {
                             if ips.is_empty() {
                                 return false;
@@ -528,8 +516,7 @@ where
                             }
                             true
                         })
-                        .unwrap_or(false);
-                    apply_invert(result)
+                        .unwrap_or(false)
                 })
             }
         }
@@ -538,43 +525,41 @@ where
                 values.iter().map(lower_case_if(case_insensitive)).collect();
 
             Box::new(move |context: &Context| {
-                let result = getter(context)
+                getter(context)
                     .map(|v| v.0)
                     .map(lower_case_if(case_insensitive))
                     .map(|v| as_set.contains(&v))
-                    .unwrap_or(false);
-                apply_invert(result)
+                    .unwrap_or(false)
             })
         }
         ConstraintExpression::StrStartsWith { values } => {
             let as_vec: Vec<String> = values.to_vec();
             Box::new(move |context: &Context| {
-                let result = getter(context)
+                getter(context)
                     .map(|v| v.0)
                     .map(lower_case_if(case_insensitive))
                     .map(|v| as_vec.iter().any(|entry| v.starts_with(entry)))
-                    .unwrap_or(false);
-                apply_invert(result)
+                    .unwrap_or(false)
             })
         }
         ConstraintExpression::StrEndsWith { values } => {
             let as_vec: Vec<String> = values.to_vec();
             Box::new(move |context: &Context| {
-                let result = getter(context)
+                getter(context)
                     .map(|v| v.0)
                     .map(lower_case_if(case_insensitive))
                     .map(|v| as_vec.iter().any(|entry| v.ends_with(entry)))
-                    .unwrap_or(false);
-                apply_invert(result)
+                    .unwrap_or(false)
             })
         }
         _ => Box::new(|_| false),
-    }
+    };
+    Box::new(move |context: &Context| apply_invert(compiled_fn(context)))
 }
 
-fn _apply_invert(inverted: Option<bool>) -> impl Fn(bool) -> bool + Clone {
+fn _apply_invert(inverted: bool) -> impl Fn(bool) -> bool + Clone {
     move |state| {
-        if inverted.unwrap_or_default() {
+        if inverted {
             !state
         } else {
             state
@@ -590,7 +575,7 @@ fn _compile_constraints(constraints: Vec<Constraint>) -> Vec<Evaluate> {
                 constraint.context_name,
                 constraint.expression,
                 constraint.inverted,
-                constraint.case_insensitive.unwrap_or(false),
+                constraint.case_insensitive,
             );
             let apply_invert = _apply_invert(inverted);
 
@@ -626,13 +611,13 @@ fn _compile_constraints(constraints: Vec<Constraint>) -> Vec<Evaluate> {
                     |context| context.user_id.as_ref(),
                 ),
                 "currentTime" => _compile_constraint_date(expression, apply_invert, |context| {
-                    context.current_time
+                    context.current_time.as_ref()
                 }),
                 _ => _compile_constraint_string(
                     expression,
                     apply_invert,
                     case_insensitive,
-                    move |context| context.get_property(&context_name),
+                    move |context| context.properties.get(&context_name),
                 ),
             }
         })
@@ -698,8 +683,8 @@ mod tests {
     fn default_constraint() -> Constraint {
         Constraint {
             context_name: "".into(),
-            case_insensitive: None,
-            inverted: None,
+            case_insensitive: false,
+            inverted: false,
             expression: ConstraintExpression::In { values: vec![] },
         }
     }
@@ -806,7 +791,7 @@ mod tests {
                 expression: ConstraintExpression::In {
                     values: vec!["development".into()]
                 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -854,7 +839,7 @@ mod tests {
                 expression: ConstraintExpression::NotIn {
                     values: vec!["staging".into(), "development".into()]
                 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -978,8 +963,11 @@ mod tests {
 
     #[test]
     fn test_constrain_with_date_constraints() {
-        // .currentTime defaults to now
-        let context = Context::default();
+        let now = Utc::now();
+        let context = Context {
+            current_time: Some(now),
+            ..Default::default()
+        };
         assert!(!super::constrain(
             Some(vec![Constraint {
                 context_name: "currentTime".into(),
@@ -1011,7 +999,7 @@ mod tests {
                 expression: ConstraintExpression::DateAfter {
                     value: Utc::now() - TimeDelta::seconds(30)
                 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1020,8 +1008,8 @@ mod tests {
 
         let context = Context {
             current_time: DateTime::<FixedOffset>::parse_from_rfc3339("2024-07-18T17:18:25.844Z")
-                .unwrap()
-                .to_utc(),
+                .ok()
+                .map(|date| date.to_utc()),
             ..Default::default()
         };
 
@@ -1040,7 +1028,7 @@ mod tests {
             Some(vec![Constraint {
                 context_name: "currentTime".into(),
                 expression: ConstraintExpression::DateBefore { value: Utc::now() },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1073,7 +1061,7 @@ mod tests {
     fn test_constrain_with_semver_constraints() {
         let context = Context {
             properties: hashmap! {
-                "version".into() => Some("1.2.3-rc.2".into())
+                "version".into() => "1.2.3-rc.2".into()
             },
             ..Default::default()
         };
@@ -1115,7 +1103,7 @@ mod tests {
 
         let context = Context {
             properties: hashmap! {
-                "app_version".into() => Some("1.0.0-alpha.1".into())
+                "app_version".into() => "1.0.0-alpha.1".into()
             },
             ..Default::default()
         };
@@ -1139,7 +1127,7 @@ mod tests {
                 expression: ConstraintExpression::SemverLT {
                     value: Version::from_str("0.155.0").unwrap()
                 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1165,7 +1153,7 @@ mod tests {
                 expression: ConstraintExpression::SemverGT {
                     value: Version::from_str("1.0.0-beta.1").unwrap()
                 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1191,7 +1179,7 @@ mod tests {
                 expression: ConstraintExpression::SemverEq {
                     value: Version::from_str("1.0.0-beta.10").unwrap()
                 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1238,7 +1226,7 @@ mod tests {
                 expression: ConstraintExpression::StrContains {
                     values: vec!["Ondo".into(), "gigabad".into()]
                 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1252,7 +1240,7 @@ mod tests {
                 expression: ConstraintExpression::StrContains {
                     values: vec!["Ondo".into(), "gigabad".into()]
                 },
-                case_insensitive: Some(true),
+                case_insensitive: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1290,7 +1278,7 @@ mod tests {
                 expression: ConstraintExpression::StrStartsWith {
                     values: vec!["and".into(), "Gon".into()]
                 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1304,7 +1292,7 @@ mod tests {
                 expression: ConstraintExpression::StrStartsWith {
                     values: vec!["and".into(), "Gon".into()]
                 },
-                case_insensitive: Some(true),
+                case_insensitive: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1342,7 +1330,7 @@ mod tests {
                 expression: ConstraintExpression::StrEndsWith {
                     values: vec!["Ola".into(), "Oga".into()]
                 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1356,7 +1344,7 @@ mod tests {
                 expression: ConstraintExpression::StrEndsWith {
                     values: vec!["Ola".into(), "Oga".into()]
                 },
-                case_insensitive: Some(true),
+                case_insensitive: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1368,7 +1356,7 @@ mod tests {
     fn test_constrain_with_num_constraints() {
         let context = Context {
             properties: hashmap! {
-                "times".into() => Some("30".into())
+                "times".into() => "30".into()
             },
             ..Default::default()
         };
@@ -1428,7 +1416,7 @@ mod tests {
             Some(vec![Constraint {
                 context_name: "times".into(),
                 expression: ConstraintExpression::NumEq { value: 30.0 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1439,7 +1427,7 @@ mod tests {
             Some(vec![Constraint {
                 context_name: "times".into(),
                 expression: ConstraintExpression::NumLT { value: 31.0 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1450,7 +1438,7 @@ mod tests {
             Some(vec![Constraint {
                 context_name: "times".into(),
                 expression: ConstraintExpression::NumLTE { value: 40.0 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1461,7 +1449,7 @@ mod tests {
             Some(vec![Constraint {
                 context_name: "times".into(),
                 expression: ConstraintExpression::NumGT { value: 29.0 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,
@@ -1472,7 +1460,7 @@ mod tests {
             Some(vec![Constraint {
                 context_name: "times".into(),
                 expression: ConstraintExpression::NumGTE { value: 30.0 },
-                inverted: Some(true),
+                inverted: true,
                 ..default_constraint()
             }]),
             &super::default,

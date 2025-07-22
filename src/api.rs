@@ -44,35 +44,38 @@ pub struct Strategy {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct Constraint {
-    #[serde(rename = "contextName")]
     pub context_name: String,
-    #[serde(rename = "caseInsensitive")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub case_insensitive: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub inverted: Option<bool>,
+    #[serde(default)]
+    pub case_insensitive: bool,
+    #[serde(default)]
+    pub inverted: bool,
     #[serde(flatten)]
     pub expression: ConstraintExpression,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(tag = "operator")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ConstraintExpression {
     // Dates
-    #[serde(rename = "DATE_AFTER")]
-    DateAfter { value: DateTime<Utc> },
-    #[serde(rename = "DATE_BEFORE")]
-    DateBefore { value: DateTime<Utc> },
+    DateAfter {
+        value: DateTime<Utc>,
+    },
+    DateBefore {
+        value: DateTime<Utc>,
+    },
 
     // In
-    #[serde(rename = "IN")]
-    In { values: Vec<String> },
-    #[serde(rename = "NOT_IN")]
-    NotIn { values: Vec<String> },
+    In {
+        values: Vec<String>,
+    },
+    NotIn {
+        values: Vec<String>,
+    },
 
     // Numbers
-    #[serde(rename = "NUM_EQ")]
     NumEq {
         #[serde(deserialize_with = "deserialize_number_from_string")]
         value: f64,
@@ -99,20 +102,28 @@ pub enum ConstraintExpression {
     },
 
     // Semver
-    #[serde(rename = "SEMVER_EQ")]
-    SemverEq { value: Version },
+    SemverEq {
+        value: Version,
+    },
     #[serde(rename = "SEMVER_GT")]
-    SemverGT { value: Version },
+    SemverGT {
+        value: Version,
+    },
     #[serde(rename = "SEMVER_LT")]
-    SemverLT { value: Version },
+    SemverLT {
+        value: Version,
+    },
 
     // String
-    #[serde(rename = "STR_CONTAINS")]
-    StrContains { values: Vec<String> },
-    #[serde(rename = "STR_STARTS_WITH")]
-    StrStartsWith { values: Vec<String> },
-    #[serde(rename = "STR_ENDS_WITH")]
-    StrEndsWith { values: Vec<String> },
+    StrContains {
+        values: Vec<String>,
+    },
+    StrStartsWith {
+        values: Vec<String>,
+    },
+    StrEndsWith {
+        values: Vec<String>,
+    },
 
     #[serde(untagged)]
     Unknown(Value),
@@ -400,16 +411,16 @@ mod tests {
             vec![
                 Constraint {
                     context_name: "appId".to_string(),
-                    case_insensitive: Some(false,),
-                    inverted: Some(false,),
+                    case_insensitive: false,
+                    inverted: false,
                     expression: In {
                         values: vec!["app.known.name".to_string(),],
                     },
                 },
                 Constraint {
                     context_name: "currentTime".to_string(),
-                    case_insensitive: Some(false,),
-                    inverted: Some(false,),
+                    case_insensitive: false,
+                    inverted: false,
                     expression: DateAfter {
                         value: DateTime::<FixedOffset>::parse_from_rfc3339("2025-07-17T23:59:00Z")
                             .unwrap()
@@ -418,20 +429,20 @@ mod tests {
                 },
                 Constraint {
                     context_name: "remoteAddress".to_string(),
-                    case_insensitive: Some(false,),
-                    inverted: Some(false,),
+                    case_insensitive: false,
+                    inverted: false,
                     expression: NumGTE { value: 3333.0 },
                 },
                 Constraint {
                     context_name: "appId".to_string(),
-                    case_insensitive: Some(false,),
-                    inverted: Some(false,),
+                    case_insensitive: false,
+                    inverted: false,
                     expression: NumEq { value: 888.0 },
                 },
                 Constraint {
                     context_name: "appId".to_string(),
-                    case_insensitive: Some(false,),
-                    inverted: Some(false,),
+                    case_insensitive: false,
+                    inverted: false,
                     expression: SemverEq {
                         value: Version::from_str("1.2.3").unwrap(),
                     },

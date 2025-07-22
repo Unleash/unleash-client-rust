@@ -111,8 +111,7 @@ mod tests {
         for suite_name in suite_names {
             log::info!("Running suite {suite_name}");
             let suite_content = fs::read(spec_dir.join(&suite_name))?;
-            let suite: Suite =
-                serde_json::from_slice(&suite_content).map_err(|err| err.to_string())?;
+            let suite: Suite = serde_json::from_slice(&suite_content)?;
 
             #[allow(non_camel_case_types)]
             #[derive(Debug, Deserialize, Serialize, Enum, Clone)]

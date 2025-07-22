@@ -755,17 +755,22 @@ where
                 .await
             {
                 Ok(features) => {
-                    // warn if features contain unknown or unparsable constraints
-                    let warnings: Vec<_> = features
-                        .features
-                        .iter()
-                        .flat_map(|f| f.strategies.iter().filter_map(move |s| Some((&f.name, &s.name, s.constraints.as_ref()?))))
-                        .flat_map(|(f_name, s_name, c)| c.iter().filter_map(move |c| matches!(&c.expression, ConstraintExpression::Unknown(..)).then_some((f_name, s_name, c))))
-                        .map(|(f_name, s_name, c)| format!("Unknown or invalid constraint expression {:?} detected in strategy '{}' in feature toggle '{}'", serde_json::to_string(&c.expression), s_name, f_name))
-                        .collect();
-
-                    for message in warnings {
-                        warn!("{message}");
+                    for feature in &features.features {
+                        for strategy in &feature.strategies {
+                            if let Some(constraints) = &strategy.constraints {
+                                for constraint in constraints {
+                                    if matches!(
+                                        &constraint.expression,
+                                        ConstraintExpression::Unknown(..)
+                                    ) {
+                                        warn!("Unknown or invalid constraint expression {:?} detected in strategy '{}' in feature toggle '{}'",  
+                                            serde_json::to_string(&constraint.expression),
+                                            strategy.name,
+                                            feature.name);
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     match self.memoize(features.features) {

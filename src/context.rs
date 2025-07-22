@@ -27,42 +27,31 @@ impl<'de> de::Deserialize<'de> for IPAddress {
     }
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Context {
-    #[serde(rename = "userId")]
     pub user_id: Option<String>,
-    #[serde(rename = "sessionId")]
     pub session_id: Option<String>,
-    #[serde(rename = "remoteAddress")]
     pub remote_address: Option<IPAddress>,
+    #[serde(default, deserialize_with = "deserialize_context_properties")]
+    pub properties: HashMap<String, String>,
     #[serde(default)]
-    pub properties: HashMap<String, Option<String>>,
-    #[serde(default, rename = "appName")]
     pub app_name: String,
     #[serde(default)]
     pub environment: String,
-    /// Defaults to the current time.
-    #[serde(rename = "currentTime", default = "Utc::now")]
-    pub current_time: DateTime<Utc>,
+    pub current_time: Option<DateTime<Utc>>,
 }
 
-impl Context {
-    pub fn get_property(&self, prop_key: &str) -> Option<&String> {
-        self.properties.get(prop_key).into_iter().flatten().next()
-    }
-}
-
-impl Default for Context {
-    fn default() -> Self {
-        Context {
-            user_id: Default::default(),
-            session_id: Default::default(),
-            remote_address: Default::default(),
-            properties: Default::default(),
-            app_name: Default::default(),
-            environment: Default::default(),
-            current_time: Utc::now(),
-        }
-    }
+fn deserialize_context_properties<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<String, String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let map = HashMap::<String, Option<String>>::deserialize(deserializer)?;
+    let map: HashMap<String, String> = map
+        .into_iter()
+        .filter_map(|(key, value)| Some((key, value?)))
+        .collect();
+    Ok(map)
 }
