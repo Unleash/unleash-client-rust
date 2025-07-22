@@ -235,9 +235,7 @@ fn batch(c: &mut Criterion) {
     let cpus = num_cpus::get();
     let client = Arc::new(client::<HttpClient>(cpus));
     let iterations = 50_000;
-    println!(
-        "Benchmarking across {cpus} threads with {iterations} iterations per thread"
-    );
+    println!("Benchmarking across {cpus} threads with {iterations} iterations per thread");
     let mut group = c.benchmark_group("batch");
     group
         .throughput(Throughput::Elements(iterations))
