@@ -25,8 +25,7 @@ mod tests {
         let version_regex = Regex::new(r"^unleash-client-rust:\d+\.\d+\.\d+$").unwrap();
         assert!(
             version_regex.is_match(version_output),
-            "Version output did not match expected format: {}",
-            version_output
+            "Version output did not match expected format: {version_output}"
         );
     }
 }

@@ -14,8 +14,7 @@ use std::time::Duration;
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use enum_map::Enum;
 use maplit::hashmap;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+use rand::{distr::Alphanumeric, rng, Rng};
 use serde::{Deserialize, Serialize};
 
 use unleash_api_client::api::{Feature, Features, Strategy};
@@ -170,7 +169,7 @@ where
     let mut features = vec![];
     for i in 0..count {
         // once for enums, once for strings
-        let name = format!("Flexible{}", i);
+        let name = format!("Flexible{i}");
         features.push(Feature {
             description: Some(name.clone()),
             enabled: true,
@@ -184,7 +183,7 @@ where
                 ..Default::default()
             }],
         });
-        let name = format!("flexible{}", i);
+        let name = format!("flexible{i}");
         features.push(Feature {
             description: Some(name.clone()),
             enabled: true,
@@ -209,7 +208,7 @@ where
 
 #[inline]
 fn random_str() -> String {
-    thread_rng()
+    rng()
         .sample_iter(&Alphanumeric)
         .take(30)
         .map(char::from)
@@ -218,9 +217,7 @@ fn random_str() -> String {
 
 fn batch(c: &mut Criterion) {
     cfg_if::cfg_if! {
-        if #[cfg(feature = "surf")] {
-            use surf::Client as HttpClient;
-        } else if #[cfg(feature = "reqwest")] {
+        if #[cfg(feature = "reqwest")] {
             use reqwest::Client as HttpClient;
         } else if #[cfg(feature = "reqwest-11")] {
             use reqwest_11::Client as HttpClient;
@@ -238,10 +235,7 @@ fn batch(c: &mut Criterion) {
     let cpus = num_cpus::get();
     let client = Arc::new(client::<HttpClient>(cpus));
     let iterations = 50_000;
-    println!(
-        "Benchmarking across {} threads with {} iterations per thread",
-        cpus, iterations
-    );
+    println!("Benchmarking across {cpus} threads with {iterations} iterations per thread");
     let mut group = c.benchmark_group("batch");
     group
         .throughput(Throughput::Elements(iterations))
@@ -324,7 +318,7 @@ fn batch(c: &mut Criterion) {
             let mut threads = vec![];
             for cpu in 0..cpus {
                 let thread_client = client.clone();
-                let feature_str = format!("Flexible{}", cpu);
+                let feature_str = format!("Flexible{cpu}");
                 let feature = serde_plain::from_str::<UserFeatures>(&feature_str).unwrap();
                 let handle = thread::spawn(move || {
                     let context = Context {
@@ -347,7 +341,7 @@ fn batch(c: &mut Criterion) {
             let mut threads = vec![];
             for cpu in 0..cpus {
                 let thread_client = client.clone();
-                let feature_str = format!("flexible{}", cpu);
+                let feature_str = format!("flexible{cpu}");
                 let handle = thread::spawn(move || {
                     let context = Context {
                         user_id: Some(random_str()),
@@ -369,7 +363,7 @@ fn batch(c: &mut Criterion) {
             let mut threads = vec![];
             for cpu in 0..cpus {
                 let thread_client = client.clone();
-                let feature_str = format!("Unknown{}", cpu);
+                let feature_str = format!("Unknown{cpu}");
                 let feature = serde_plain::from_str::<UserFeatures>(&feature_str).unwrap();
                 let handle = thread::spawn(move || {
                     let context = Context {
@@ -392,7 +386,7 @@ fn batch(c: &mut Criterion) {
             let mut threads = vec![];
             for cpu in 0..cpus {
                 let thread_client = client.clone();
-                let feature_str = format!("unknown{}", cpu);
+                let feature_str = format!("unknown{cpu}");
                 let handle = thread::spawn(move || {
                     let context = Context {
                         user_id: Some(random_str()),
@@ -421,9 +415,7 @@ fn single_call(c: &mut Criterion) {
         .with_level(log::LevelFilter::Warn)
         .init();
     cfg_if::cfg_if! {
-        if #[cfg(feature = "surf")] {
-            use surf::Client as HttpClient;
-        } else if #[cfg(feature = "reqwest")] {
+        if #[cfg(feature = "reqwest")] {
             use reqwest::Client as HttpClient;
         } else if #[cfg(feature = "reqwest-11")] {
             use reqwest_11::Client as HttpClient;

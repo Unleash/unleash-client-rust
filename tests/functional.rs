@@ -9,7 +9,6 @@
 #[cfg(feature = "functional")]
 mod tests {
     use std::sync::Arc;
-    use std::thread;
     use std::time::Duration;
     use std::{future::Future, pin::Pin};
 
@@ -20,9 +19,6 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use unleash_api_client::{client, config::EnvironmentConfig, http::HttpClient};
-
-    #[cfg(not(any(feature = "surf", feature = "reqwest")))]
-    compile_error!("Cannot run test suite without a client enabled");
 
     #[allow(non_camel_case_types)]
     #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
@@ -40,25 +36,7 @@ mod tests {
         async fn sleep(d: Duration);
     }
 
-    #[cfg(feature = "surf")]
-    struct AsyncStdAsync;
-    #[cfg(feature = "surf")]
-    #[async_trait]
-    impl AsyncImpl for AsyncStdAsync {
-        type JoinHandle = task::JoinHandle<()>;
-        fn spawn<F>(f: F) -> Self::JoinHandle
-        where
-            F: Future<Output = ()> + Send + 'static,
-        {
-            task::spawn(f)
-        }
-
-        async fn sleep(d: Duration) {
-            thread::sleep(d)
-        }
-    }
-
-    #[cfg(or(feature = "reqwest", feature = "reqwest-11"))]
+    #[cfg(any(feature = "reqwest", feature = "reqwest-11"))]
     struct TokioJoinHandle {
         inner: tokio::task::JoinHandle<()>,
     }
@@ -80,9 +58,9 @@ mod tests {
         }
     }
 
-    #[cfg(or(feature = "reqwest", feature = "reqwest-11"))]
+    #[cfg(any(feature = "reqwest", feature = "reqwest-11"))]
     struct TokioAsync;
-    #[cfg(or(feature = "reqwest", feature = "reqwest-11"))]
+    #[cfg(any(feature = "reqwest", feature = "reqwest-11"))]
     #[async_trait]
     impl AsyncImpl for TokioAsync {
         type JoinHandle = TokioJoinHandle;
@@ -129,20 +107,12 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "surf")]
-    #[test]
-    fn test_smoke_async_surf() {
-        task::block_on(async {
-            test_smoke_async::<surf::Client>().await.unwrap();
-        });
-    }
-
     #[cfg(feature = "reqwest")]
     #[tokio::test]
     async fn test_smoke_async_reqwest() {
         test_smoke_async::<reqwest::Client>().await.unwrap();
     }
-    #[cfg(feature = "reqwest-11")]
+    #[cfg(all(feature = "reqwest-11", not(feature = "reqwest")))]
     #[tokio::test]
     async fn test_smoke_async_reqwest() {
         test_smoke_async::<reqwest_11::Client>().await.unwrap();
@@ -184,22 +154,12 @@ mod tests {
         A::sleep(Duration::from_millis(500)).await;
         assert!(client.is_enabled(UserFeatures::default, None, false));
         // Ensure the metrics get up-loaded
-        A::sleep(Duration::from_millis(500));
+        A::sleep(Duration::from_millis(500)).await;
         client.stop_poll().await;
 
         handler.await;
         println!("got metrics");
         Ok(())
-    }
-
-    #[cfg(feature = "surf")]
-    #[test]
-    fn test_smoke_threaded_surf() {
-        task::block_on(async {
-            test_smoke_threaded::<surf::Client, AsyncStdAsync>()
-                .await
-                .unwrap();
-        });
     }
 
     #[cfg(feature = "reqwest")]
@@ -209,7 +169,7 @@ mod tests {
             .await
             .unwrap();
     }
-    #[cfg(feature = "reqwest-11")]
+    #[cfg(all(feature = "reqwest-11", not(feature = "reqwest")))]
     #[tokio::test]
     async fn test_smoke_threaded_reqwest() {
         test_smoke_threaded::<reqwest_11::Client, TokioAsync>()

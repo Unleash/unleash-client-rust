@@ -88,9 +88,7 @@ mod tests {
     fn test_client_specification() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
     {
         cfg_if::cfg_if! {
-            if #[cfg(feature = "surf")] {
-                use surf::Client as HttpClient;
-            } else if #[cfg(feature = "reqwest")] {
+            if #[cfg(feature = "reqwest")] {
                 use reqwest::Client as HttpClient;
             } else if #[cfg(feature = "reqwest-11")] {
                 use reqwest_11::Client as HttpClient;
@@ -115,7 +113,7 @@ mod tests {
         let index = fs::read(spec_dir.join("index.json"))?;
         let suite_names: Vec<String> = serde_json::from_slice(&index)?;
         for suite_name in suite_names {
-            log::info!("Running suite {}", suite_name);
+            log::info!("Running suite {suite_name}");
             let suite_content = fs::read(spec_dir.join(suite_name))?;
             let suite: Suite = serde_json::from_slice(&suite_content)?;
 

@@ -22,19 +22,7 @@ enum UserFeatures {
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     cfg_if::cfg_if! {
-        if #[cfg(feature = "surf")] {
-            use core::future::Future;
-            use surf::Client as HttpClient;
-            use async_std::task;
-            #[derive(Clone)]
-            struct RT {}
-            impl RT {
-                fn block_on<F: Future>(&self, future: F) -> F::Output {
-                    task::block_on(future)
-                }
-            }
-            let rt = RT{};
-        } else if #[cfg(feature = "reqwest")] {
+        if #[cfg(feature = "reqwest")] {
             use reqwest::Client as HttpClient;
             use tokio::runtime::Runtime;
             let rt = Arc::new(Runtime::new().unwrap());

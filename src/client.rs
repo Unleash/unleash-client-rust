@@ -274,51 +274,33 @@ where
             default: bool,
         ) -> bool {
             if feature.strategies.is_empty() && feature.known && !feature.feature_disabled {
-                trace!(
-                    "is_enabled: feature {:?} has no strategies: enabling",
-                    feature_enum
-                );
+                trace!("is_enabled: feature {feature_enum:?} has no strategies: enabling");
                 return true;
             }
             for memo in feature.strategies.iter() {
                 if memo(context) {
                     debug!(
-                        "is_enabled: feature {:?} enabled by memo {:p}, context {:?}",
-                        feature_enum, memo, context
+                        "is_enabled: feature {feature_enum:?} enabled by memo {memo:p}, context {context:?}"
                     );
                     return true;
                 } else {
                     // Traces once per strategy (memo)
                     trace!(
-                        "is_enabled: feature {:?} not enabled by memo {:p}, context {:?}",
-                        feature_enum,
-                        memo,
-                        context
+                        "is_enabled: feature {feature_enum:?} not enabled by memo {memo:p}, context {context:?}"
                     );
                 }
             }
             if !feature.known {
-                debug!(
-                    "is_enabled: Unknown feature {:?}, using default {}",
-                    feature_enum, default
-                );
+                debug!("is_enabled: Unknown feature {feature_enum:?}, using default {default}");
                 default
             } else {
                 // known, non-empty, missed all strategies: disabled
-                debug!(
-                    "is_enabled: feature {:?} failed all strategies, disabling",
-                    feature_enum
-                );
+                debug!("is_enabled: feature {feature_enum:?} failed all strategies, disabling");
                 false
             }
         }
 
-        trace!(
-            "is_enabled: feature {:?} default {}, context {:?}",
-            feature_enum,
-            default,
-            context
-        );
+        trace!("is_enabled: feature {feature_enum:?} default {default}, context {context:?}");
         let feature = &self.features[feature_enum.clone()];
         let default_context = &Default::default();
         let context = context.unwrap_or(default_context);
@@ -345,37 +327,26 @@ where
             let default_context: Context = Default::default();
             let context = context.unwrap_or(&default_context);
             if feature.strategies.is_empty() && feature.known && !feature.feature_disabled {
-                trace!(
-                    "is_enabled: feature {} has no strategies: enabling",
-                    feature_name
-                );
+                trace!("is_enabled: feature {feature_name} has no strategies: enabling");
                 feature.enabled.fetch_add(1, Ordering::Relaxed);
                 return true;
             }
             for memo in feature.strategies.iter() {
                 if memo(context) {
                     debug!(
-                        "is_enabled: feature {} enabled by memo {:p}, context {:?}",
-                        feature_name, memo, context
+                        "is_enabled: feature {feature_name} enabled by memo {memo:p}, context {context:?}"
                     );
                     feature.enabled.fetch_add(1, Ordering::Relaxed);
                     return true;
                 } else {
                     // Traces once per strategy (memo)
                     trace!(
-                        "is_enabled: feature {} not enabled by memo {:p}, context {:?}",
-                        feature_name,
-                        memo,
-                        context
+                        "is_enabled: feature {feature_name} not enabled by memo {memo:p}, context {context:?}"
                     );
                 }
             }
             if !feature.known {
-                trace!(
-                    "is_enabled: Unknown feature {}, using default {}",
-                    feature_name,
-                    default
-                );
+                trace!("is_enabled: Unknown feature {feature_name}, using default {default}");
                 if default {
                     feature.enabled.fetch_add(1, Ordering::Relaxed);
                 } else {
@@ -386,10 +357,7 @@ where
                 false
             }
         } else {
-            debug!(
-                "is_enabled: Unknown feature {}, using default {}",
-                feature_name, default
-            );
+            debug!("is_enabled: Unknown feature {feature_name}, using default {default}");
             // Insert a compiled feature to track metrics.
             cached_features.rcu(|cached_state: &Option<Arc<CachedState<F>>>| {
                 // Did someone swap None in ?
@@ -484,15 +452,11 @@ where
     /// The key used to hash is the first of the username, sessionid, the host
     /// address, or a random string per call to get_variant.
     pub fn get_variant(&self, feature_enum: F, context: &Context) -> Variant {
-        trace!(
-            "get_variant: feature {:?} context {:?}",
-            feature_enum,
-            context
-        );
+        trace!("get_variant: feature {feature_enum:?} context {context:?}");
         let cache = self.cached_state();
         let cache = match cache.as_ref() {
             None => {
-                trace!("get_variant: feature {:?} no cached state", feature_enum);
+                trace!("get_variant: feature {feature_enum:?} no cached state");
                 return Variant::disabled();
             }
             Some(cache) => cache,
@@ -517,11 +481,7 @@ where
     /// The key used to hash is the first of the username, sessionid, the host
     /// address, or a random string per call to get_variant.
     pub fn get_variant_str(&self, feature_name: &str, context: &Context) -> Variant {
-        trace!(
-            "get_variant_Str: feature {} context {:?}",
-            feature_name,
-            context
-        );
+        trace!("get_variant_Str: feature {feature_name} context {context:?}");
         assert!(
             self.enable_str_features,
             "String feature lookup not enabled"
@@ -529,7 +489,7 @@ where
         let cache = self.cached_state();
         let cache = match cache.as_ref() {
             None => {
-                trace!("get_variant_str: feature {} no cached state", feature_name);
+                trace!("get_variant_str: feature {feature_name} no cached state");
                 return Variant::disabled();
             }
             Some(cache) => cache,
@@ -555,10 +515,7 @@ where
         }
         match feature {
             None => {
-                trace!(
-                    "get_variant_str: feature {} enabled but not in cache",
-                    feature_name
-                );
+                trace!("get_variant_str: feature {feature_name} enabled but not in cache");
                 Variant::disabled()
             }
             Some(feature) => self._get_variant(feature, feature_name, context),
@@ -572,13 +529,13 @@ where
         context: &Context,
     ) -> Variant {
         if feature.variants.is_empty() {
-            trace!("get_variant: feature {:?} no variants", feature_name);
+            trace!("get_variant: feature {feature_name:?} no variants");
             feature
                 .disabled_variant_count
                 .fetch_add(1, Ordering::Relaxed);
             return Variant::disabled();
         }
-        let group = format!("{}", feature_name);
+        let group = format!("{feature_name}");
         let mut remote_address: Option<String> = None;
         let identifier = context
             .user_id
@@ -587,18 +544,17 @@ where
             .or_else(|| {
                 context.remote_address.as_ref().and_then({
                     |addr| {
-                        remote_address = Some(format!("{:?}", addr));
+                        remote_address = Some(format!("{addr:?}"));
                         remote_address.as_ref()
                     }
                 })
             });
         if identifier.is_none() {
             trace!(
-                "get_variant: feature {:?} context has no identifiers, selecting randomly",
-                feature_name
+                "get_variant: feature {feature_name:?} context has no identifiers, selecting randomly"
             );
-            let mut rng = rand::thread_rng();
-            let picked = rng.gen_range(0..feature.variants.len());
+            let mut rng = rand::rng();
+            let picked = rng.random_range(0..feature.variants.len());
             feature.variants[picked]
                 .count
                 .fetch_add(1, Ordering::Relaxed);
@@ -632,16 +588,11 @@ where
     }
 
     pub fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
-        trace!(
-            "is_enabled: feature {:?} default {}, context {:?}",
-            feature_enum,
-            default,
-            context
-        );
+        trace!("is_enabled: feature {feature_enum:?} default {default}, context {context:?}");
         let cache = self.cached_state();
         let cache = match cache.as_ref() {
             None => {
-                trace!("is_enabled: feature {:?} no cached state", feature_enum);
+                trace!("is_enabled: feature {feature_enum:?} no cached state");
                 return false;
             }
             Some(cache) => cache,
@@ -655,12 +606,7 @@ where
         context: Option<&Context>,
         default: bool,
     ) -> bool {
-        trace!(
-            "is_enabled: feature_str {:?} default {}, context {:?}",
-            feature_name,
-            default,
-            context
-        );
+        trace!("is_enabled: feature_str {feature_name:?} default {default}, context {context:?}");
         assert!(
             self.enable_str_features,
             "String feature lookup not enabled"
@@ -826,16 +772,16 @@ where
                         }
                     }
                     Err(err) => {
-                        warn!("poll: failed to memoize features: {:?}", err);
+                        warn!("poll: failed to memoize features: {err:?}");
                     }
                 },
                 Err(err) => {
-                    warn!("poll: failed to retrieve features: {:?}", err);
+                    warn!("poll: failed to retrieve features: {err:?}");
                 }
             }
 
             let duration = Duration::from_millis(self.interval);
-            debug!("poll: waiting {:?}", duration);
+            debug!("poll: waiting {duration:?}");
             Delay::new(duration).await;
 
             if !self.polling.load(Ordering::Relaxed) {
@@ -938,9 +884,7 @@ mod tests {
     use crate::strategy;
 
     cfg_if::cfg_if! {
-        if #[cfg(feature = "surf")] {
-            use surf::Client as HttpClient;
-        } else if #[cfg(feature = "reqwest")] {
+        if #[cfg(feature = "reqwest")] {
             use reqwest::Client as HttpClient;
         } else if #[cfg(feature = "reqwest-11")] {
             use reqwest_11::Client as HttpClient;

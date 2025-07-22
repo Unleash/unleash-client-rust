@@ -7,7 +7,7 @@
 
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     cfg_if::cfg_if! {
-        if #[cfg(feature = "surf")] {
+        if #[cfg(feature = "reqwest")] {
 
         use std::time::Duration;
 
@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
             let config = EnvironmentConfig::from_env()?;
             let client = client::ClientBuilder::default()
                 .interval(500)
-                .into_client::<UserFeatures, surf::Client>(
+                .into_client::<UserFeatures, reqwest::Client>(
                     &config.api_url,
                     &config.app_name,
                     &config.instance_id,

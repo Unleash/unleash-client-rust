@@ -112,11 +112,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
   Enables reqwest 0.11 with RusTLS support
 * **strict** -
   Turn unexpected fields in API responses into errors
-* **surf-client** -
-  Enables Surf as the HTTP client to retrieve flags
 */
 #![warn(clippy::all)]
-#![cfg_attr(feature = "backtrace", feature(backtrace))]
 
 pub mod api;
 pub mod client;
@@ -160,9 +157,7 @@ pub mod prelude {
     pub use crate::client::ClientBuilder;
     pub use crate::config::EnvironmentConfig;
     cfg_if::cfg_if! {
-        if #[cfg(feature = "surf")] {
-            pub use surf::Client as DefaultClient;
-        } else if #[cfg(feature = "reqwest")] {
+        if #[cfg(feature = "reqwest")] {
             pub use reqwest::Client as DefaultClient;
         } else if #[cfg(feature = "reqwest-11")] {
             pub use reqwest_11::Client as DefaultClient;

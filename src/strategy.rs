@@ -232,9 +232,9 @@ fn pick_random(pct: u8) -> bool {
         0 => false,
         100 => true,
         pct => {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             // generates 0's but not 100's.
-            let picked = rng.gen_range(0..100);
+            let picked = rng.random_range(0..100);
             pct > picked
         }
     }
@@ -347,7 +347,7 @@ fn _ip_to_vec(ips: &[String]) -> Vec<IpNet> {
         if let Ok(ip) = ip_parsed {
             result.push(ip);
         } else {
-            warn!("Could not parse IP address {:?}", ip_str);
+            warn!("Could not parse IP address {ip_str:?}");
         }
     }
     result
@@ -446,7 +446,7 @@ pub fn constrain<S: Fn(Option<HashMap<String, String>>) -> Evaluate + Sync + Sen
                 trace!("constrain: empty constraints list, bypassing");
                 compiled_strategy
             } else {
-                trace!("constrain: compiling constraints list {:?}", constraints);
+                trace!("constrain: compiling constraints list {constraints:?}");
                 let constraints = _compile_constraints(constraints);
                 // Create a closure that will evaluate against the context.
                 Box::new(move |context| {
