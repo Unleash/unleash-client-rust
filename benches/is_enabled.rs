@@ -169,7 +169,7 @@ where
     let mut features = vec![];
     for i in 0..count {
         // once for enums, once for strings
-        let name = format!("Flexible{}", i);
+        let name = format!("Flexible{i}");
         features.push(Feature {
             description: Some(name.clone()),
             enabled: true,
@@ -183,7 +183,7 @@ where
                 ..Default::default()
             }],
         });
-        let name = format!("flexible{}", i);
+        let name = format!("flexible{i}");
         features.push(Feature {
             description: Some(name.clone()),
             enabled: true,
@@ -236,8 +236,7 @@ fn batch(c: &mut Criterion) {
     let client = Arc::new(client::<HttpClient>(cpus));
     let iterations = 50_000;
     println!(
-        "Benchmarking across {} threads with {} iterations per thread",
-        cpus, iterations
+        "Benchmarking across {cpus} threads with {iterations} iterations per thread"
     );
     let mut group = c.benchmark_group("batch");
     group
@@ -321,7 +320,7 @@ fn batch(c: &mut Criterion) {
             let mut threads = vec![];
             for cpu in 0..cpus {
                 let thread_client = client.clone();
-                let feature_str = format!("Flexible{}", cpu);
+                let feature_str = format!("Flexible{cpu}");
                 let feature = serde_plain::from_str::<UserFeatures>(&feature_str).unwrap();
                 let handle = thread::spawn(move || {
                     let context = Context {
@@ -344,7 +343,7 @@ fn batch(c: &mut Criterion) {
             let mut threads = vec![];
             for cpu in 0..cpus {
                 let thread_client = client.clone();
-                let feature_str = format!("flexible{}", cpu);
+                let feature_str = format!("flexible{cpu}");
                 let handle = thread::spawn(move || {
                     let context = Context {
                         user_id: Some(random_str()),
@@ -366,7 +365,7 @@ fn batch(c: &mut Criterion) {
             let mut threads = vec![];
             for cpu in 0..cpus {
                 let thread_client = client.clone();
-                let feature_str = format!("Unknown{}", cpu);
+                let feature_str = format!("Unknown{cpu}");
                 let feature = serde_plain::from_str::<UserFeatures>(&feature_str).unwrap();
                 let handle = thread::spawn(move || {
                     let context = Context {
@@ -389,7 +388,7 @@ fn batch(c: &mut Criterion) {
             let mut threads = vec![];
             for cpu in 0..cpus {
                 let thread_client = client.clone();
-                let feature_str = format!("unknown{}", cpu);
+                let feature_str = format!("unknown{cpu}");
                 let handle = thread::spawn(move || {
                     let context = Context {
                         user_id: Some(random_str()),

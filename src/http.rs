@@ -210,8 +210,7 @@ mod tests {
         let sdk_version = headers.get("unleash-sdk").unwrap();
         assert!(
             version_regex.is_match(sdk_version),
-            "Version output did not match expected format: {}",
-            sdk_version
+            "Version output did not match expected format: {sdk_version}"
         );
 
         let connection_id = headers.get("unleash-connection-id").unwrap();
