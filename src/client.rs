@@ -471,7 +471,7 @@ mod tests {
 
     use super::ClientBuilder;
     use crate::client::Variant;
-    use crate::context::{Context, IPAddress};
+    use crate::context::Context;
     use crate::strategy;
 
     cfg_if::cfg_if! {

@@ -446,5 +446,3 @@ fn single_call(c: &mut Criterion) {
 
 criterion_group!(benches, single_call, batch);
 criterion_main!(benches);
-
-
