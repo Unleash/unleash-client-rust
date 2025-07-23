@@ -5,7 +5,7 @@ use std::default::Default;
 use std::fmt::Debug;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -20,7 +20,7 @@ use unleash_yggdrasil::state::EnrichedContext;
 use unleash_yggdrasil::{EngineState, UpdateMessage};
 use uuid::Uuid;
 
-use crate::api::{self, features_endpoint, Metrics, Registration};
+use crate::api::{features_endpoint, Metrics, Registration};
 use crate::context::Context;
 use crate::http::{HttpClient, HTTP};
 use crate::strategy;
@@ -135,29 +135,6 @@ impl Default for ClientBuilder {
             enable_str_features: false,
             interval: 15000,
             strategies: Default::default(),
-        }
-    }
-}
-
-pub struct CachedVariant {
-    count: AtomicU64,
-    value: api::Variant,
-}
-
-impl Clone for CachedVariant {
-    fn clone(&self) -> Self {
-        Self {
-            count: AtomicU64::new(self.count.load(Ordering::Relaxed)),
-            value: self.value.clone(),
-        }
-    }
-}
-
-impl From<api::Variant> for CachedVariant {
-    fn from(variant: api::Variant) -> Self {
-        CachedVariant {
-            value: variant,
-            count: AtomicU64::new(0),
         }
     }
 }

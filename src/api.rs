@@ -19,24 +19,6 @@ pub struct Strategy {
     pub parameters: Option<HashMap<String, String>>,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
-pub struct Variant {
-    pub name: String,
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub weight: u16,
-    pub payload: Option<HashMap<String, String>>,
-    pub overrides: Option<Vec<VariantOverride>>,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
-pub struct VariantOverride {
-    #[serde(rename = "contextName")]
-    pub context_name: String,
-    pub values: Vec<String>,
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Registration {
     #[serde(rename = "appName")]
@@ -89,37 +71,9 @@ impl Metrics {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ToggleMetrics {
-    pub yes: u64,
-    pub no: u64,
-    pub variants: HashMap<String, u64>,
-}
-
-fn deserialize_number_from_string<'de, T, D>(deserializer: D) -> Result<T, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: std::str::FromStr + serde::Deserialize<'de>,
-    <T as std::str::FromStr>::Err: std::fmt::Display,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum StringOrInt<T> {
-        String(String),
-        Number(T),
-    }
-
-    match StringOrInt::<T>::deserialize(deserializer)? {
-        StringOrInt::String(s) => s.parse::<T>().map_err(serde::de::Error::custom),
-        StringOrInt::Number(i) => Ok(i),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-
     use crate::api::features_endpoint;
-
     use super::{Metrics, Registration};
 
     #[test]
