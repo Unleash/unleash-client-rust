@@ -224,6 +224,11 @@ where
     /// The key used to hash is the first of the username, sessionid, the host
     /// address, or a random string per call to get_variant.
     pub fn get_variant_str(&self, feature_name: &str, context: &Context) -> Variant {
+        trace!("get_variant_Str: feature {feature_name} context {context:?}");
+        assert!(
+            self.enable_str_features,
+            "String feature lookup not enabled"
+        );
         let cache = self.cached_state();
         let Some(cache) = cache.as_ref() else {
             return Variant::disabled(false);
@@ -276,6 +281,11 @@ where
         context: Option<&Context>,
         default: bool,
     ) -> bool {
+        trace!("is_enabled: feature_str {feature_name:?} default {default}, context {context:?}");
+        assert!(
+            self.enable_str_features,
+            "String feature lookup not enabled"
+        );
         let cache = self.cached_state();
         let Some(cache) = cache.as_ref() else {
             trace!("is_enabled: No API state");
