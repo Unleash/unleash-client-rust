@@ -131,13 +131,13 @@ impl ClientBuilder {
 
 impl Default for ClientBuilder {
     fn default() -> ClientBuilder {
-        let result = ClientBuilder {
+        
+        ClientBuilder {
             disable_metric_submission: false,
             enable_str_features: false,
             interval: 15000,
             strategies: Default::default(),
-        };
-        result
+        }
     }
 }
 
@@ -238,16 +238,18 @@ where
         let feature_enabled = cache.check_enabled(&context).unwrap_or(false);
         let yggdrasil_variant = cache.check_variant(&context);
 
-        cache.count_toggle(&feature_name, feature_enabled);
+        cache.count_toggle(feature_name, feature_enabled);
         cache.count_variant(
-            &feature_name,
+            feature_name,
             &yggdrasil_variant
                 .as_ref()
                 .map(|v| v.name.clone())
                 .unwrap_or_else(|| "disabled".into()),
         );
 
-        let variant = yggdrasil_variant
+        
+
+        yggdrasil_variant
             .map(|variant_def| {
                 let payload = if let Some(original_payload) = variant_def.payload {
                     HashMap::from_iter([
@@ -260,14 +262,12 @@ where
 
                 Variant {
                     name: variant_def.name.clone(),
-                    payload: payload,
+                    payload,
                     enabled: variant_def.enabled,
                     feature_enabled,
                 }
             })
-            .unwrap_or_else(|| Variant::disabled(feature_enabled));
-
-        variant
+            .unwrap_or_else(|| Variant::disabled(feature_enabled))
     }
 
     pub fn is_enabled(&self, feature_enum: F, context: Option<&Context>, default: bool) -> bool {
@@ -308,7 +308,7 @@ where
             });
 
         let enabled = cache.check_enabled(&context).unwrap_or(default);
-        cache.count_toggle(&feature_name, enabled);
+        cache.count_toggle(feature_name, enabled);
         enabled
     }
 
@@ -333,15 +333,12 @@ where
 
         let old_metrics = old
             .and_then(|old| Arc::try_unwrap(old).ok())
-            .and_then(|mut state| state.get_metrics(Utc::now()))
-            .and_then(|metrics_bucket| {
-                Some(Metrics {
+            .and_then(|mut state| state.get_metrics(Utc::now())).map(|metrics_bucket| Metrics {
                     app_name: self.app_name.clone(),
                     instance_id: self.instance_id.clone(),
                     connection_id: self.connection_id.clone(),
                     bucket: metrics_bucket,
-                })
-            });
+                });
 
         Ok(old_metrics)
     }
