@@ -1,7 +1,9 @@
 // Copyright 2020 Cognite AS
 //! <https://docs.getunleash.io/user_guide/unleash_context>
+use chrono::Utc;
 use std::{collections::HashMap, net::IpAddr};
 
+use chrono::DateTime;
 use serde::{de, Deserialize};
 
 // Custom IP Address newtype that can be deserialised from strings e.g. 127.0.0.1 for use with tests.
@@ -26,18 +28,30 @@ impl<'de> de::Deserialize<'de> for IPAddress {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Context {
-    #[serde(rename = "userId")]
     pub user_id: Option<String>,
-    #[serde(rename = "sessionId")]
     pub session_id: Option<String>,
-    #[serde(rename = "remoteAddress")]
     pub remote_address: Option<IPAddress>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_context_properties")]
     pub properties: HashMap<String, String>,
-    #[serde(default, rename = "appName")]
+    #[serde(default)]
     pub app_name: String,
     #[serde(default)]
     pub environment: String,
+    pub current_time: Option<DateTime<Utc>>,
+}
+
+fn deserialize_context_properties<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<String, String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let map = HashMap::<String, Option<String>>::deserialize(deserializer)?;
+    let map: HashMap<String, String> = map
+        .into_iter()
+        .filter_map(|(key, value)| Some((key, value?)))
+        .collect();
+    Ok(map)
 }

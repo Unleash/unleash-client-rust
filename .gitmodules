@@ -1,3 +1,4 @@
 [submodule "client-specification"]
 	path = client-specification
 	url = https://github.com/Unleash/client-specification
+	branch = client-spec-rust-sdk

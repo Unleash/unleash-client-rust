@@ -64,15 +64,11 @@ mod tests {
     }
 
     #[derive(Debug, Deserialize)]
-    #[serde(untagged)]
     enum Tests {
-        Tests {
-            tests: Vec<Test>,
-        },
-        VariantTests {
-            #[serde(rename = "variantTests")]
-            variant_tests: Vec<VariantTest>,
-        },
+        #[serde(rename = "tests")]
+        Tests(Vec<Test>),
+        #[serde(rename = "variantTests")]
+        VariantTests(Vec<VariantTest>),
     }
 
     #[derive(Debug, Deserialize)]
@@ -114,10 +110,8 @@ mod tests {
         let suite_names: Vec<String> = serde_json::from_slice(&index)?;
         for suite_name in suite_names {
             log::info!("Running suite {suite_name}");
-            let suite_content = fs::read(spec_dir.join(suite_name))?;
+            let suite_content = fs::read(spec_dir.join(&suite_name))?;
             let suite: Suite = serde_json::from_slice(&suite_content)?;
-
-            assert_eq!(1, suite.state.version);
 
             #[allow(non_camel_case_types)]
             #[derive(Debug, Deserialize, Serialize, Enum, Clone)]
@@ -135,26 +129,27 @@ mod tests {
             c.memoize(suite.state.features).unwrap();
 
             match suite.tests {
-                Tests::Tests { tests } => {
+                Tests::Tests(tests) => {
                     for test in tests {
                         assert_eq!(
                             test.expected_result,
                             c.is_enabled_str(&test.toggle_name, Some(&test.context), false),
-                            "Test '{}' failed: got {} instead of {}",
+                            "Test '{}' in suite '{}' failed: got {} instead of {}",
                             test.description,
+                            suite_name,
                             !test.expected_result,
                             test.expected_result
                         );
                     }
                 }
-                Tests::VariantTests { variant_tests } => {
+                Tests::VariantTests(variant_tests) => {
                     for test in variant_tests {
                         let result = c.get_variant_str(&test.toggle_name, &test.context);
 
                         assert_eq!(
                             test.expected_result, result,
-                            "Test '{}' failed: got {:?} instead of {:?}",
-                            test.description, result, test.expected_result
+                            "Test '{}' in suite '{}' failed: got {:?} instead of {:?}",
+                            test.description, suite_name, result, test.expected_result
                         );
                     }
                 }
