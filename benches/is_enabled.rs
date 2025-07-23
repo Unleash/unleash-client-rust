@@ -17,10 +17,11 @@ use maplit::hashmap;
 use rand::{distr::Alphanumeric, rng, Rng};
 use serde::{Deserialize, Serialize};
 
-use unleash_api_client::api::{Feature, Features, Strategy};
 use unleash_api_client::client;
 use unleash_api_client::context::Context;
 use unleash_api_client::http::HttpClient;
+use unleash_types::client_features::{ClientFeature, ClientFeatures, Strategy};
+use unleash_yggdrasil::UpdateMessage;
 
 // TODO: do a build.rs thing to determine available CPU count at build time for
 // optimal vec sizing.
@@ -170,39 +171,61 @@ where
     for i in 0..count {
         // once for enums, once for strings
         let name = format!("Flexible{i}");
-        features.push(Feature {
+
+        features.push(ClientFeature {
             description: Some(name.clone()),
             enabled: true,
             created_at: None,
             variants: None,
             name,
-            strategies: vec![Strategy {
+            strategies: Some(vec![Strategy {
                 name: "flexibleRollout".into(),
                 parameters: Some(hashmap!["stickiness".into()=>"default".into(),
                     "groupId".into()=>"flexible".into(), "rollout".into()=>"33".into()]),
-                ..Default::default()
-            }],
+                constraints: None,
+                segments: None,
+                sort_order: None,
+                variants: None,
+            }]),
+            feature_type: Some("release".into()),
+            last_seen_at: None,
+            stale: None,
+            impression_data: None,
+            project: None,
+            dependencies: None,
         });
         let name = format!("flexible{i}");
-        features.push(Feature {
+        features.push(ClientFeature {
             description: Some(name.clone()),
             enabled: true,
             created_at: None,
             variants: None,
             name,
-            strategies: vec![Strategy {
+            strategies: Some(vec![Strategy {
                 name: "flexibleRollout".into(),
                 parameters: Some(hashmap!["stickiness".into()=>"default".into(),
                     "groupId".into()=>"flexible".into(), "rollout".into()=>"33".into()]),
-                ..Default::default()
-            }],
+                constraints: None,
+                segments: None,
+                sort_order: None,
+                variants: None,
+            }]),
+            feature_type: Some("release".into()),
+            last_seen_at: None,
+            stale: None,
+            impression_data: None,
+            project: None,
+            dependencies: None,
         });
     }
-    let f = Features {
+    let f = UpdateMessage::FullResponse(ClientFeatures {
         version: 1,
         features,
-    };
-    // client.memoize(f.features).unwrap();
+        meta: None,
+        segments: None,
+        query: None,
+    });
+    client.memoize(f).unwrap();
     client
 }
 
