@@ -8,30 +8,8 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use unleash_types::client_metrics::MetricBucket;
 
-#[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
-pub struct Features {
-    pub version: u8,
-    pub features: Vec<Feature>,
-}
-
-impl Features {
-    pub fn endpoint(api_url: &str) -> String {
-        format!("{}/client/features", api_url.trim_end_matches('/'))
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
-pub struct Feature {
-    pub name: String,
-    #[serde(default)]
-    pub description: Option<String>,
-    pub enabled: bool,
-    pub strategies: Vec<Strategy>,
-    pub variants: Option<Vec<Variant>>,
-    #[serde(rename = "createdAt")]
-    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+pub fn features_endpoint(api_url: &str) -> String {
+    format!("{}/client/features", api_url.trim_end_matches('/'))
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug)]
@@ -140,125 +118,9 @@ where
 #[cfg(test)]
 mod tests {
 
-    use super::{Features, Metrics, Registration};
+    use crate::api::features_endpoint;
 
-    #[test]
-    fn parse_reference_doc() -> Result<(), serde_json::Error> {
-        let data = r#"
-    {
-      "version": 1,
-      "features": [
-      {
-        "name": "F1",
-        "description": "Default Strategy, enabledoff, variants",
-        "enabled": false,
-        "strategies": [
-        {
-          "name": "default"
-        }
-        ],
-        "variants":[
-        {"name":"Foo","weight":50,"payload":{"type":"string","value":"bar"}},
-        {"name":"Bar","weight":50,"overrides":[{"contextName":"userId","values":["robert"]}]}
-        ],
-        "createdAt": "2020-04-28T07:26:27.366Z"
-      },
-      {
-        "name": "F2",
-        "description": "customStrategy+params, enabled",
-        "enabled": true,
-        "strategies": [
-        {
-          "name": "customStrategy",
-          "parameters": {
-            "strategyParameter": "data,goes,here"
-          }
-        }
-        ],
-        "variants": null,
-        "createdAt": "2020-01-12T15:05:11.462Z"
-      },
-      {
-        "name": "F3",
-        "description": "two strategies",
-        "enabled": true,
-        "strategies": [
-        {
-          "name": "customStrategy",
-          "parameters": {
-            "strategyParameter": "data,goes,here"
-          }
-        },
-        {
-          "name": "default",
-          "parameters": {}
-        }
-        ],
-        "variants": null,
-        "createdAt": "2019-09-30T09:00:39.282Z"
-      },
-      {
-        "name": "F4",
-        "description": "Multiple params",
-        "enabled": true,
-        "strategies": [
-        {
-          "name": "customStrategy",
-          "parameters": {
-            "p1": "foo",
-            "p2": "bar"
-          }
-        }
-        ],
-        "variants": null,
-        "createdAt": "2020-03-17T01:07:25.713Z"
-      }
-      ]
-    }
-    "#;
-        let parsed: super::Features = serde_json::from_str(data)?;
-        assert_eq!(1, parsed.version);
-        Ok(())
-    }
-
-    #[test]
-    fn parse_null_feature_doc() -> Result<(), serde_json::Error> {
-        let data = r#"
-    {
-      "version": 1,
-      "features": [
-      {
-        "name": "F1",
-        "description": null,
-        "enabled": false,
-        "strategies": [
-        {
-          "name": "default"
-        }
-        ],
-        "variants":[
-        {"name":"Foo","weight":50,"payload":{"type":"string","value":"bar"}},
-        {"name":"Bar","weight":50,"overrides":[{"contextName":"userId","values":["robert"]}]}
-        ],
-        "createdAt": "2020-04-28T07:26:27.366Z"
-      }
-      ]
-    }
-    "#;
-        let parsed: super::Features = serde_json::from_str(data)?;
-        assert_eq!(1, parsed.version);
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_variant_with_str_weight() -> Result<(), serde_json::Error> {
-        let data = r#"
-      {"name":"Foo","weight":"50","payload":{"type":"string","value":"bar"}}
-      "#;
-        let parsed: super::Variant = serde_json::from_str(data)?;
-        assert_eq!(50, parsed.weight);
-        Ok(())
-    }
+    use super::{Metrics, Registration};
 
     #[test]
     fn test_registration_customisation() {
@@ -284,11 +146,11 @@ mod tests {
         );
 
         assert_eq!(
-            Features::endpoint("https://localhost:4242/api"),
+            features_endpoint("https://localhost:4242/api"),
             "https://localhost:4242/api/client/features"
         );
         assert_eq!(
-            Features::endpoint("https://localhost:4242/api/"),
+            features_endpoint("https://localhost:4242/api/"),
             "https://localhost:4242/api/client/features"
         );
 

@@ -20,7 +20,7 @@ use unleash_yggdrasil::state::EnrichedContext;
 use unleash_yggdrasil::{EngineState, UpdateMessage};
 use uuid::Uuid;
 
-use crate::api::{self, Features, Metrics, Registration};
+use crate::api::{self, features_endpoint, Metrics, Registration};
 use crate::context::Context;
 use crate::http::{HttpClient, HTTP};
 use crate::strategy;
@@ -91,7 +91,6 @@ impl ClientBuilder {
             api_url: api_url.into(),
             app_name: app_name.into(),
             disable_metric_submission: self.disable_metric_submission,
-            enable_str_features: self.enable_str_features,
             instance_id: instance_id.into(),
             connection_id: connection_id.clone(),
             interval: self.interval,
@@ -131,7 +130,6 @@ impl ClientBuilder {
 
 impl Default for ClientBuilder {
     fn default() -> ClientBuilder {
-        
         ClientBuilder {
             disable_metric_submission: false,
             enable_str_features: false,
@@ -172,7 +170,6 @@ where
     api_url: String,
     app_name: String,
     disable_metric_submission: bool,
-    enable_str_features: bool,
     instance_id: String,
     connection_id: String,
     interval: u64,
@@ -224,11 +221,6 @@ where
     /// The key used to hash is the first of the username, sessionid, the host
     /// address, or a random string per call to get_variant.
     pub fn get_variant_str(&self, feature_name: &str, context: &Context) -> Variant {
-        trace!("get_variant_Str: feature {feature_name} context {context:?}");
-        assert!(
-            self.enable_str_features,
-            "String feature lookup not enabled"
-        );
         let cache = self.cached_state();
         let Some(cache) = cache.as_ref() else {
             return Variant::disabled(false);
@@ -246,8 +238,6 @@ where
                 .map(|v| v.name.clone())
                 .unwrap_or_else(|| "disabled".into()),
         );
-
-        
 
         yggdrasil_variant
             .map(|variant_def| {
@@ -282,10 +272,6 @@ where
         default: bool,
     ) -> bool {
         trace!("is_enabled: feature_str {feature_name:?} default {default}, context {context:?}");
-        assert!(
-            self.enable_str_features,
-            "String feature lookup not enabled"
-        );
         let cache = self.cached_state();
         let Some(cache) = cache.as_ref() else {
             trace!("is_enabled: No API state");
@@ -333,12 +319,13 @@ where
 
         let old_metrics = old
             .and_then(|old| Arc::try_unwrap(old).ok())
-            .and_then(|mut state| state.get_metrics(Utc::now())).map(|metrics_bucket| Metrics {
-                    app_name: self.app_name.clone(),
-                    instance_id: self.instance_id.clone(),
-                    connection_id: self.connection_id.clone(),
-                    bucket: metrics_bucket,
-                });
+            .and_then(|mut state| state.get_metrics(Utc::now()))
+            .map(|metrics_bucket| Metrics {
+                app_name: self.app_name.clone(),
+                instance_id: self.instance_id.clone(),
+                connection_id: self.connection_id.clone(),
+                bucket: metrics_bucket,
+            });
 
         Ok(old_metrics)
     }
@@ -352,7 +339,7 @@ where
     /// stop_poll is called().
     pub async fn poll_for_updates(&self) {
         // TODO: add an event / pipe to permit immediate exit.
-        let endpoint = Features::endpoint(&self.api_url);
+        let endpoint = features_endpoint(&self.api_url);
         let metrics_endpoint = Metrics::endpoint(&self.api_url);
         self.polling.store(true, Ordering::Relaxed);
         loop {
