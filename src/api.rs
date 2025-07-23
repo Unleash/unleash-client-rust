@@ -4,10 +4,9 @@ use std::collections::HashMap;
 use std::default::Default;
 
 use crate::version::get_sdk_version;
-use chrono::{DateTime, Utc};
-use semver::Version;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use unleash_types::client_metrics::MetricBucket;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
@@ -38,95 +37,8 @@ pub struct Feature {
 #[derive(Clone, Default, Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "strict", serde(deny_unknown_fields))]
 pub struct Strategy {
-    pub constraints: Option<Vec<Constraint>>,
     pub name: String,
     pub parameters: Option<HashMap<String, String>>,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct Constraint {
-    pub context_name: String,
-    #[serde(default)]
-    pub case_insensitive: bool,
-    #[serde(default)]
-    pub inverted: bool,
-    #[serde(flatten)]
-    pub expression: ConstraintExpression,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
-#[serde(tag = "operator")]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ConstraintExpression {
-    // Dates
-    DateAfter {
-        value: DateTime<Utc>,
-    },
-    DateBefore {
-        value: DateTime<Utc>,
-    },
-
-    // In
-    In {
-        values: Vec<String>,
-    },
-    NotIn {
-        values: Vec<String>,
-    },
-
-    // Numbers
-    NumEq {
-        #[serde(deserialize_with = "deserialize_number_from_string")]
-        value: f64,
-    },
-    #[serde(rename = "NUM_GT")]
-    NumGT {
-        #[serde(deserialize_with = "deserialize_number_from_string")]
-        value: f64,
-    },
-    #[serde(rename = "NUM_GTE")]
-    NumGTE {
-        #[serde(deserialize_with = "deserialize_number_from_string")]
-        value: f64,
-    },
-    #[serde(rename = "NUM_LT")]
-    NumLT {
-        #[serde(deserialize_with = "deserialize_number_from_string")]
-        value: f64,
-    },
-    #[serde(rename = "NUM_LTE")]
-    NumLTE {
-        #[serde(deserialize_with = "deserialize_number_from_string")]
-        value: f64,
-    },
-
-    // Semver
-    SemverEq {
-        value: Version,
-    },
-    #[serde(rename = "SEMVER_GT")]
-    SemverGT {
-        value: Version,
-    },
-    #[serde(rename = "SEMVER_LT")]
-    SemverLT {
-        value: Version,
-    },
-
-    // String
-    StrContains {
-        values: Vec<String>,
-    },
-    StrStartsWith {
-        values: Vec<String>,
-    },
-    StrEndsWith {
-        values: Vec<String>,
-    },
-
-    #[serde(untagged)]
-    Unknown(Value),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -190,7 +102,7 @@ pub struct Metrics {
     pub instance_id: String,
     #[serde(rename = "connectionId")]
     pub connection_id: String,
-    pub bucket: MetricsBucket,
+    pub bucket: MetricBucket,
 }
 
 impl Metrics {
@@ -204,13 +116,6 @@ pub struct ToggleMetrics {
     pub yes: u64,
     pub no: u64,
     pub variants: HashMap<String, u64>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct MetricsBucket {
-    pub start: chrono::DateTime<chrono::Utc>,
-    pub stop: chrono::DateTime<chrono::Utc>,
-    pub toggles: HashMap<String, ToggleMetrics>,
 }
 
 fn deserialize_number_from_string<'de, T, D>(deserializer: D) -> Result<T, D::Error>
@@ -235,12 +140,7 @@ where
 #[cfg(test)]
 mod tests {
 
-    use std::str::FromStr;
-
-    use chrono::{DateTime, FixedOffset};
-    use semver::Version;
-
-    use super::{Constraint, Features, Metrics, Registration};
+    use super::{Features, Metrics, Registration};
 
     #[test]
     fn parse_reference_doc() -> Result<(), serde_json::Error> {
@@ -357,98 +257,6 @@ mod tests {
       "#;
         let parsed: super::Variant = serde_json::from_str(data)?;
         assert_eq!(50, parsed.weight);
-        Ok(())
-    }
-
-    #[test]
-    fn test_parse_constraint() -> Result<(), serde_json::Error> {
-        use super::ConstraintExpression::*;
-        let data = r#"[
-          {
-            "contextName": "appId",
-            "operator": "IN",
-            "values": [
-                "app.known.name"
-            ],
-            "caseInsensitive": false,
-            "inverted": false
-          },
-          {
-            "contextName": "currentTime",
-            "operator": "DATE_AFTER",
-            "caseInsensitive": false,
-            "inverted": false,
-            "value": "2025-07-17T23:59:00.000Z"
-          },
-          {
-            "contextName": "remoteAddress",
-            "operator": "NUM_GTE",
-            "caseInsensitive": false,
-            "inverted": false,
-            "value": "3333"
-          },
-          {
-            "contextName": "appId",
-            "operator": "NUM_EQ",
-            "caseInsensitive": false,
-            "inverted": false,
-            "value": "888"
-          },
-          {
-            "contextName": "appId",
-            "operator": "SEMVER_EQ",
-            "caseInsensitive": false,
-            "inverted": false,
-            "value": "1.2.3",
-            "values": []
-          }
-        ]"#;
-
-        let parsed: Vec<Constraint> = serde_json::from_str(data)?;
-
-        assert_eq!(
-            parsed,
-            vec![
-                Constraint {
-                    context_name: "appId".to_string(),
-                    case_insensitive: false,
-                    inverted: false,
-                    expression: In {
-                        values: vec!["app.known.name".to_string(),],
-                    },
-                },
-                Constraint {
-                    context_name: "currentTime".to_string(),
-                    case_insensitive: false,
-                    inverted: false,
-                    expression: DateAfter {
-                        value: DateTime::<FixedOffset>::parse_from_rfc3339("2025-07-17T23:59:00Z")
-                            .unwrap()
-                            .to_utc(),
-                    },
-                },
-                Constraint {
-                    context_name: "remoteAddress".to_string(),
-                    case_insensitive: false,
-                    inverted: false,
-                    expression: NumGTE { value: 3333.0 },
-                },
-                Constraint {
-                    context_name: "appId".to_string(),
-                    case_insensitive: false,
-                    inverted: false,
-                    expression: NumEq { value: 888.0 },
-                },
-                Constraint {
-                    context_name: "appId".to_string(),
-                    case_insensitive: false,
-                    inverted: false,
-                    expression: SemverEq {
-                        value: Version::from_str("1.2.3").unwrap(),
-                    },
-                },
-            ]
-        );
         Ok(())
     }
 
