@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::iter::FromIterator;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use arc_swap::ArcSwapOption;
@@ -17,13 +17,13 @@ use log::{debug, trace, warn};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use unleash_yggdrasil::state::EnrichedContext;
-use unleash_yggdrasil::{EngineState, UpdateMessage};
+use unleash_yggdrasil::{EngineState, UpdateMessage, KNOWN_STRATEGIES};
 use uuid::Uuid;
 
 use crate::api::{features_endpoint, Metrics, Registration};
 use crate::context::Context;
 use crate::http::{HttpClient, HTTP};
-use crate::strategy;
+use crate::strategy::{self, CustomStrategyHandler};
 
 // ----------------- Variant
 
@@ -47,7 +47,11 @@ impl Variant {
     }
 }
 
-fn build_yggdrasil_context(context: &Context, feature_name: &str) -> EnrichedContext {
+fn build_yggdrasil_context(
+    context: &Context,
+    feature_name: &str,
+    custom_strategy_results: Option<HashMap<String, bool>>,
+) -> EnrichedContext {
     EnrichedContext {
         user_id: context.user_id.clone(),
         session_id: context.session_id.clone(),
@@ -59,7 +63,7 @@ fn build_yggdrasil_context(context: &Context, feature_name: &str) -> EnrichedCon
             .as_ref()
             .map(|remote_addr| remote_addr.0.to_string()),
         properties: Some(context.properties.clone()),
-        external_results: None,
+        external_results: custom_strategy_results,
         toggle_name: feature_name.to_string(),
         runtime_hostname: None, //explicitly set to None, this is an escape hatch for environments like WASM where this cannot be resolved
     }
@@ -102,7 +106,7 @@ impl ClientBuilder {
                 authorization,
             )?,
             cached_state: ArcSwapOption::from(None),
-            strategies: Mutex::new(self.strategies),
+            custom_strategy_handler: CustomStrategyHandler::new(self.strategies),
             _phantom: PhantomData::<F>,
         })
     }
@@ -154,8 +158,9 @@ where
     // Permits making extension calls to the Unleash API not yet modelled in the Rust SDK.
     pub http: HTTP<C>,
     // known strategies: strategy_name : memoiser
-    strategies: Mutex<HashMap<String, strategy::Strategy>>,
+    // strategies: Mutex<HashMap<String, strategy::Strategy>>,
     cached_state: ArcSwapOption<EngineState>,
+    custom_strategy_handler: CustomStrategyHandler,
     _phantom: PhantomData<F>,
 }
 
@@ -202,7 +207,12 @@ where
         let Some(cache) = cache.as_ref() else {
             return Variant::disabled(false);
         };
-        let context = build_yggdrasil_context(context, feature_name);
+        let context = build_yggdrasil_context(
+            context,
+            feature_name,
+            self.custom_strategy_handler
+                .evaluate_custom_strategies(feature_name, context),
+        );
 
         let feature_enabled = cache.check_enabled(&context).unwrap_or(false);
         let yggdrasil_variant = cache.check_variant(&context);
@@ -256,7 +266,12 @@ where
         };
 
         let context = context
-            .map(|context| build_yggdrasil_context(context, feature_name))
+            .map(|context| {
+                let custom_strategies = self
+                    .custom_strategy_handler
+                    .evaluate_custom_strategies(feature_name, context);
+                build_yggdrasil_context(context, feature_name, custom_strategies)
+            })
             .unwrap_or_else(|| EnrichedContext {
                 user_id: None,
                 session_id: None,
@@ -265,7 +280,9 @@ where
                 current_time: None,
                 remote_address: None,
                 properties: None,
-                external_results: None,
+                external_results: self
+                    .custom_strategy_handler
+                    .evaluate_custom_strategies(feature_name, &Context::default()),
                 toggle_name: feature_name.to_string(),
                 runtime_hostname: None,
             });
@@ -287,6 +304,7 @@ where
     ) -> Result<Option<Metrics>, Box<dyn std::error::Error + Send + Sync>> {
         trace!("memoize: start");
         let mut engine_state = EngineState::default();
+        self.custom_strategy_handler.update_strategies(&features);
         engine_state.take_state(features);
 
         // Now we have the new cache compiled, swap it in.
@@ -367,18 +385,15 @@ where
 
     /// Register this client with the API endpoint.
     pub async fn register(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let mut strategies = self.custom_strategy_handler.get_known_strategies();
+        strategies.extend(KNOWN_STRATEGIES.iter().map(|s| s.to_string()));
+
         let registration = Registration {
             app_name: self.app_name.clone(),
             instance_id: self.instance_id.clone(),
             connection_id: self.connection_id.clone(),
             interval: self.interval,
-            strategies: self
-                .strategies
-                .lock()
-                .unwrap()
-                .keys()
-                .map(|s| s.to_owned())
-                .collect(),
+            strategies: strategies,
             ..Default::default()
         };
         let success = self
@@ -762,12 +777,12 @@ mod tests {
             ..Default::default()
         };
         // user cba should be present on reversed
-        // assert!(client.is_enabled(UserFeatures::reversed, Some(&present), false));
-        // // user abc should not
-        // assert!(!client.is_enabled(UserFeatures::reversed, Some(&missing), false));
-        // // adding custom strategies shouldn't disable built-in ones
-        // // default should be enabled, no context needed
-        // assert!(client.is_enabled(UserFeatures::default, None, false));
+        assert!(client.is_enabled(UserFeatures::reversed, Some(&present), false));
+        // user abc should not
+        assert!(!client.is_enabled(UserFeatures::reversed, Some(&missing), false));
+        // adding custom strategies shouldn't disable built-in ones
+        // default should be enabled, no context needed
+        assert!(client.is_enabled(UserFeatures::default, None, false));
     }
 
     fn variant_features() -> UpdateMessage {
