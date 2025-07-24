@@ -175,8 +175,6 @@ where
         features.push(ClientFeature {
             description: Some(name.clone()),
             enabled: true,
-            created_at: None,
-            variants: None,
             name,
             strategies: Some(vec![Strategy {
                 name: "flexibleRollout".into(),
@@ -188,18 +186,12 @@ where
                 variants: None,
             }]),
             feature_type: Some("release".into()),
-            last_seen_at: None,
-            stale: None,
-            impression_data: None,
-            project: None,
-            dependencies: None,
+            ..Default::default()
         });
         let name = format!("flexible{i}");
         features.push(ClientFeature {
             description: Some(name.clone()),
             enabled: true,
-            created_at: None,
-            variants: None,
             name,
             strategies: Some(vec![Strategy {
                 name: "flexibleRollout".into(),
@@ -211,11 +203,7 @@ where
                 variants: None,
             }]),
             feature_type: Some("release".into()),
-            last_seen_at: None,
-            stale: None,
-            impression_data: None,
-            project: None,
-            dependencies: None,
+            ..Default::default()
         });
     }
     let f = UpdateMessage::FullResponse(ClientFeatures {

@@ -374,7 +374,7 @@ where
             }
 
             let duration = Duration::from_millis(self.interval);
-            debug!("poll: waiting {:?}", duration);
+            debug!("poll: waiting {duration:?}");
             Delay::new(duration).await;
 
             if !self.polling.load(Ordering::Relaxed) {
@@ -467,8 +467,6 @@ mod tests {
                 ClientFeature {
                     description: Some("default".to_string()),
                     enabled: true,
-                    created_at: None,
-                    variants: None,
                     name: "default".into(),
                     strategies: Some(vec![Strategy {
                         name: "default".into(),
@@ -478,19 +476,11 @@ mod tests {
                         parameters: None,
                         variants: None,
                     }]),
-
-                    feature_type: Some("release".into()),
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
                 ClientFeature {
                     description: Some("userWithId".to_string()),
                     enabled: true,
-                    created_at: None,
-                    variants: None,
                     name: "userWithId".into(),
                     strategies: Some(vec![Strategy {
                         name: "userWithId".into(),
@@ -500,19 +490,11 @@ mod tests {
                         constraints: None,
                         variants: None,
                     }]),
-
-                    feature_type: Some("release".into()),
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
                 ClientFeature {
                     description: Some("userWithId+default".to_string()),
                     enabled: true,
-                    created_at: None,
-                    variants: None,
                     name: "userWithId+default".into(),
                     strategies: Some(vec![
                         Strategy {
@@ -532,19 +514,11 @@ mod tests {
                             variants: None,
                         },
                     ]),
-
-                    feature_type: Some("release".into()),
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
                 ClientFeature {
                     description: Some("disabled".to_string()),
                     enabled: false,
-                    created_at: None,
-                    variants: None,
                     name: "disabled".into(),
                     strategies: Some(vec![Strategy {
                         name: "default".into(),
@@ -554,28 +528,14 @@ mod tests {
                         parameters: None,
                         variants: None,
                     }]),
-
-                    feature_type: Some("release".into()),
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
                 ClientFeature {
                     description: Some("nostrategies".to_string()),
                     enabled: true,
-                    created_at: None,
-                    variants: None,
                     name: "nostrategies".into(),
                     strategies: Some(vec![]),
-
-                    feature_type: Some("release".into()),
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
             ],
             query: None,
@@ -723,8 +683,6 @@ mod tests {
                 ClientFeature {
                     description: Some("default".to_string()),
                     enabled: true,
-                    created_at: None,
-                    variants: None,
                     name: "default".into(),
                     strategies: Some(vec![Strategy {
                         name: "default".into(),
@@ -734,18 +692,11 @@ mod tests {
                         parameters: None,
                         variants: None,
                     }]),
-                    feature_type: Some("release".into()),
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
                 ClientFeature {
                     description: Some("reversed".to_string()),
                     enabled: true,
-                    created_at: None,
-                    variants: None,
                     name: "reversed".into(),
                     strategies: Some(vec![Strategy {
                         name: "reversed".into(),
@@ -755,12 +706,7 @@ mod tests {
                         constraints: None,
                         variants: None,
                     }]),
-                    feature_type: Some("release".into()),
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
             ],
             segments: None,
@@ -792,22 +738,13 @@ mod tests {
                 ClientFeature {
                     description: Some("disabled".to_string()),
                     enabled: false,
-                    created_at: None,
-                    variants: None,
                     name: "disabled".into(),
                     strategies: Some(vec![]),
-                    feature_type: None,
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
                 ClientFeature {
                     description: Some("novariants".to_string()),
                     enabled: true,
-                    created_at: None,
-                    variants: None,
                     name: "novariants".into(),
                     strategies: Some(vec![Strategy {
                         name: "default".into(),
@@ -817,17 +754,11 @@ mod tests {
                         parameters: None,
                         variants: None,
                     }]),
-                    feature_type: None,
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
                 ClientFeature {
                     description: Some("one".to_string()),
                     enabled: true,
-                    created_at: None,
                     variants: Some(vec![unleash_types::client_features::Variant {
                         name: "variantone".into(),
                         weight: 100,
@@ -841,17 +772,11 @@ mod tests {
                     }]),
                     name: "one".into(),
                     strategies: Some(vec![]),
-                    feature_type: None,
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
                 ClientFeature {
                     description: Some("two".to_string()),
                     enabled: true,
-                    created_at: None,
                     variants: Some(vec![
                         unleash_types::client_features::Variant {
                             name: "variantone".into(),
@@ -878,26 +803,14 @@ mod tests {
                     ]),
                     name: "two".into(),
                     strategies: Some(vec![]),
-                    feature_type: None,
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
                 ClientFeature {
                     description: Some("nostrategies".to_string()),
                     enabled: true,
-                    created_at: None,
-                    variants: None,
                     name: "nostrategies".into(),
                     strategies: Some(vec![]),
-                    feature_type: None,
-                    last_seen_at: None,
-                    stale: None,
-                    impression_data: None,
-                    project: None,
-                    dependencies: None,
+                    ..Default::default()
                 },
             ],
             segments: None,
