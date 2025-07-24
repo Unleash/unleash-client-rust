@@ -1,5 +1,6 @@
 // Copyright 2020 Cognite AS
 use async_std::task;
+use unleash_yggdrasil::UpdateMessage;
 use uuid::Uuid;
 
 use unleash_api_client::api;
@@ -9,14 +10,14 @@ use unleash_api_client::http;
 fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     task::block_on(async {
         let config = EnvironmentConfig::from_env()?;
-        let endpoint = api::Features::endpoint(&config.api_url);
+        let endpoint = api::features_endpoint(&config.api_url);
         let client: http::HTTP<reqwest::Client> = http::HTTP::new(
             config.app_name,
             config.instance_id,
             Uuid::new_v4().to_string(),
             config.secret,
         )?;
-        let res: api::Features = client.get(&endpoint).send().await?.json().await?;
+        let res: UpdateMessage = client.get(&endpoint).send().await?.json().await?;
         dbg!(res);
         Ok(())
     })

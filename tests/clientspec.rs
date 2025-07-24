@@ -9,7 +9,8 @@ mod tests {
     use enum_map::Enum;
     use serde::{Deserialize, Serialize};
 
-    use unleash_api_client::{api, client, context};
+    use unleash_api_client::{client, context};
+    use unleash_yggdrasil::UpdateMessage;
 
     #[derive(Debug, Deserialize)]
     struct Test {
@@ -36,6 +37,7 @@ mod tests {
         #[serde(rename = "payload")]
         _payload: Option<Payload>,
         enabled: bool,
+        feature_enabled: bool,
     }
 
     impl PartialEq<client::Variant> for VariantResult {
@@ -49,7 +51,10 @@ mod tests {
                 },
                 None => !other.payload.contains_key("type") && !other.payload.contains_key("value"),
             };
-            self.enabled == other.enabled && self._name == other.name && payload_matches
+            self.enabled == other.enabled
+                && self._name == other.name
+                && payload_matches
+                && self.feature_enabled == other.feature_enabled
         }
     }
 
@@ -75,7 +80,7 @@ mod tests {
     struct Suite {
         #[serde(rename = "name")]
         _name: String,
-        state: api::Features,
+        state: UpdateMessage,
         #[serde(flatten)]
         tests: Tests,
     }
@@ -125,8 +130,8 @@ mod tests {
                     None,
                 )
                 .unwrap();
-            log::info!("Using features {:?}", &suite.state.features);
-            c.memoize(suite.state.features).unwrap();
+            log::info!("Using features {:?}", &suite.state);
+            c.memoize(suite.state).unwrap();
 
             match suite.tests {
                 Tests::Tests(tests) => {

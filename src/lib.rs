@@ -127,7 +127,6 @@ pub mod version;
 pub use crate::client::{Client, ClientBuilder};
 pub use crate::config::EnvironmentConfig;
 pub use crate::context::Context;
-pub use crate::strategy::Evaluate;
 
 /// For the complete minimalist
 ///
