@@ -129,7 +129,7 @@ mod tests {
             context
                 .user_id
                 .as_ref()
-                .map_or(false, |user_id| user_id == "7")
+                .is_some_and(|user_id| user_id == "7")
         })
     }
 

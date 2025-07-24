@@ -365,11 +365,11 @@ where
                         }
                     }
                     Err(err) => {
-                        warn!("poll: failed to memoize features: {:?}", err);
+                        warn!("poll: failed to memoize features: {err:?}");
                     }
                 },
                 Err(err) => {
-                    warn!("poll: failed to retrieve features: {:?}", err);
+                    warn!("poll: failed to retrieve features: {err:?}");
                 }
             }
 
