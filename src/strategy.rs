@@ -33,8 +33,10 @@ impl Clone for Box<dyn Evaluator + Send + Sync + 'static> {
     }
 }
 
+type StrategyDefinitions = HashMap<String, Vec<(String, Option<HashMap<String, String>>)>>;
+
 pub struct CustomStrategyHandler {
-    strategy_definitions: ArcSwap<HashMap<String, Vec<(String, Option<HashMap<String, String>>)>>>,
+    strategy_definitions: ArcSwap<StrategyDefinitions>,
     strategy_implementations: HashMap<String, Strategy>,
 }
 

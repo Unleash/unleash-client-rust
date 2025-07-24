@@ -393,7 +393,7 @@ where
             instance_id: self.instance_id.clone(),
             connection_id: self.connection_id.clone(),
             interval: self.interval,
-            strategies: strategies,
+            strategies,
             ..Default::default()
         };
         let success = self
