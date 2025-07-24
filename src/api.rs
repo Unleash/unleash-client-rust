@@ -73,8 +73,8 @@ impl Metrics {
 
 #[cfg(test)]
 mod tests {
-    use crate::api::features_endpoint;
     use super::{Metrics, Registration};
+    use crate::api::features_endpoint;
 
     #[test]
     fn test_registration_customisation() {
