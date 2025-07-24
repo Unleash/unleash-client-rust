@@ -73,7 +73,6 @@ impl CustomStrategyHandler {
                     .unwrap_or(false);
                 results.insert(key, result);
             }
-            println!("My results {:#?}", results);
             results
         })
     }
