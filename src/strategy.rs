@@ -115,3 +115,77 @@ impl CustomStrategyHandler {
         self.strategy_definitions.store(Arc::new(new_strategies));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::hash_map, hash::BuildHasher};
+
+    use maplit::hashmap;
+    use unleash_types::client_features::ClientFeatures;
+
+    use super::*;
+
+    fn true_if_user_7<S: BuildHasher>(_: Option<HashMap<String, String, S>>) -> Evaluate {
+        Box::new(move |context: &Context| -> bool {
+            context
+                .user_id
+                .as_ref()
+                .map_or(false, |user_id| user_id == "7")
+        })
+    }
+
+    #[test]
+    fn test_custom_strategy_handler() {
+        let strategy: Strategy = Box::new(true_if_user_7::<hash_map::RandomState>);
+
+        let handler = CustomStrategyHandler::new(hashmap! {
+            "customStrategy1".to_string() =>  strategy,
+        });
+
+        handler.update_strategies(&UpdateMessage::FullResponse(ClientFeatures {
+            features: vec![ClientFeature {
+                name: "featWithStrategy".to_string(),
+                description: Some("Test strategy".to_string()),
+                enabled: true,
+                strategies: Some(vec![unleash_types::client_features::Strategy {
+                    name: "customStrategy1".to_string(),
+                    parameters: None,
+                    sort_order: None,
+                    segments: None,
+                    constraints: None,
+                    variants: None,
+                }]),
+                feature_type: Some("release".into()),
+                ..Default::default()
+            }],
+            version: 2,
+            segments: None,
+            query: None,
+            meta: None,
+        }));
+
+        let context = Context {
+            user_id: Some("7".to_string()),
+            ..Default::default()
+        };
+
+        let result = handler.evaluate_custom_strategies("featWithStrategy", &context);
+        assert_eq!(
+            result,
+            Some(hashmap! { "customStrategy1".to_string() => true })
+        );
+
+        let context = Context {
+            user_id: Some("8".to_string()),
+            ..Default::default()
+        };
+
+        let result = handler.evaluate_custom_strategies("featWithStrategy", &context);
+        assert_eq!(
+            result,
+            Some(hashmap! { "customStrategy1".to_string() => false })
+        );
+        let result = handler.evaluate_custom_strategies("nonExistentFeature", &context);
+        assert!(result.is_none());
+    }
+}

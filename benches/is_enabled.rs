@@ -171,7 +171,6 @@ where
     for i in 0..count {
         // once for enums, once for strings
         let name = format!("Flexible{i}");
-
         features.push(ClientFeature {
             description: Some(name.clone()),
             enabled: true,
